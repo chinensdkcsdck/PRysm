@@ -11,9 +11,8 @@ prysm:
     max-file-context-chars: 8000
     max-total-context-chars: 40000
     max-file-size-bytes: 1048576
-    budget:
-      max-files-per-batch: 20
-      max-file-context-chars: 8000
-      max-patch-chars-per-file: 4000
-      max-snippet-chars-per-file: 4000
-      max-total-context-chars: 32000
+  llm:
+    enabled: true
+    api-base-url: ${LLM_API_BASE_URL:https://dashscope.aliyuncs.com/compatible-mode/v1}
+    model: ${LLM_MODEL:qwen-plus}
+    timeout-seconds: 60
