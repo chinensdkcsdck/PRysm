@@ -5,13 +5,14 @@ on:
     types: [opened, synchronize, reopened]
 
 jobs:
-  build:
-    name: Build Prysm
+  review:
+    name: Run Prysm Review
     runs-on: ubuntu-latest
 
     permissions:
       contents: read
-      pull-requests: write
+      pull-requests: read
+      issues: write
 
     steps:
       - name: Checkout repository
@@ -24,13 +25,16 @@ jobs:
           java-version: 21
           cache: maven
 
+      - name: Test with Maven
+        run: bash ./mvnw -q test
+
       - name: Build with Maven
-        run: ./mvnw -q -DskipTests package
+        run: bash ./mvnw -q -DskipTests package
 
       - name: Run Prysm
         env:
           GITHUB_TOKEN: ${{ github.token }}
           LLM_API_KEY: ${{ secrets.LLM_API_KEY }}
-          LLM_API_BASE_URL: https://dashscope.aliyuncs.com/compatible-mode/v1
-          LLM_MODEL: qwen-plus
+          LLM_API_BASE_URL: ${{ vars.LLM_API_BASE_URL || 'https://dashscope.aliyuncs.com/compatible-mode/v1' }}
+          LLM_MODEL: ${{ vars.LLM_MODEL || 'qwen-plus' }}
         run: java -jar target/*.jar
