@@ -6,6 +6,8 @@ import com.hdg.prysm.diff.PrChangedFile;
 import com.hdg.prysm.diff.PrChangedFileStatus;
 import com.hdg.prysm.diff.PrDiff;
 import com.hdg.prysm.diff.PrDiffProvider;
+import com.hdg.prysm.review.PrReviewContext;
+import com.hdg.prysm.review.PrReviewContextLoader;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.DefaultApplicationArguments;
 import org.springframework.mock.env.MockEnvironment;
@@ -26,14 +28,16 @@ class PrReviewRunnerTest {
     void shouldSkipWhenRunnerIsDisabled() {
         PrContextResolver resolver = mock(PrContextResolver.class);
         PrDiffProvider diffProvider = mock(PrDiffProvider.class);
+        PrReviewContextLoader reviewContextLoader = mock(PrReviewContextLoader.class);
         MockEnvironment environment = new MockEnvironment()
                 .withProperty("GITHUB_ACTIONS", "true");
-        PrReviewRunner runner = new PrReviewRunner(resolver, diffProvider, environment, false);
+        PrReviewRunner runner = new PrReviewRunner(resolver, diffProvider, reviewContextLoader, environment, false);
 
         runner.run(new DefaultApplicationArguments());
 
         verify(resolver, never()).resolve();
         verify(diffProvider, never()).fetch(org.mockito.ArgumentMatchers.any());
+        verify(reviewContextLoader, never()).load(org.mockito.ArgumentMatchers.any());
     }
 
     /**
@@ -43,14 +47,16 @@ class PrReviewRunnerTest {
     void shouldSkipWhenNotRunningInGithubActions() {
         PrContextResolver resolver = mock(PrContextResolver.class);
         PrDiffProvider diffProvider = mock(PrDiffProvider.class);
+        PrReviewContextLoader reviewContextLoader = mock(PrReviewContextLoader.class);
         MockEnvironment environment = new MockEnvironment()
                 .withProperty("GITHUB_ACTIONS", "false");
-        PrReviewRunner runner = new PrReviewRunner(resolver, diffProvider, environment, true);
+        PrReviewRunner runner = new PrReviewRunner(resolver, diffProvider, reviewContextLoader, environment, true);
 
         runner.run(new DefaultApplicationArguments());
 
         verify(resolver, never()).resolve();
         verify(diffProvider, never()).fetch(org.mockito.ArgumentMatchers.any());
+        verify(reviewContextLoader, never()).load(org.mockito.ArgumentMatchers.any());
     }
 
     /**
@@ -60,19 +66,23 @@ class PrReviewRunnerTest {
     void shouldResolveContextWhenRunningInGithubActions() {
         PrContextResolver resolver = mock(PrContextResolver.class);
         PrDiffProvider diffProvider = mock(PrDiffProvider.class);
+        PrReviewContextLoader reviewContextLoader = mock(PrReviewContextLoader.class);
         PrContext context = new PrContext("chinensdkcsdck", "PRysm", 3);
-        when(resolver.resolve()).thenReturn(context);
-        when(diffProvider.fetch(context)).thenReturn(new PrDiff(
+        PrDiff diff = new PrDiff(
                 context,
                 List.of(new PrChangedFile("README.md", PrChangedFileStatus.MODIFIED, 1, 1, "patch"))
-        ));
+        );
+        when(resolver.resolve()).thenReturn(context);
+        when(diffProvider.fetch(context)).thenReturn(diff);
+        when(reviewContextLoader.load(diff)).thenReturn(new PrReviewContext(diff, List.of()));
         MockEnvironment environment = new MockEnvironment()
                 .withProperty("GITHUB_ACTIONS", "true");
-        PrReviewRunner runner = new PrReviewRunner(resolver, diffProvider, environment, true);
+        PrReviewRunner runner = new PrReviewRunner(resolver, diffProvider, reviewContextLoader, environment, true);
 
         runner.run(new DefaultApplicationArguments());
 
         verify(resolver).resolve();
         verify(diffProvider).fetch(context);
+        verify(reviewContextLoader).load(diff);
     }
 }
