@@ -1,5 +1,7 @@
 package com.hdg.prysm.runner;
 
+import com.hdg.prysm.budget.ReviewContextBudgetResult;
+import com.hdg.prysm.budget.ReviewContextBudgetService;
 import com.hdg.prysm.context.PrContext;
 import com.hdg.prysm.context.PrContextResolver;
 import com.hdg.prysm.diff.PrChangedFile;
@@ -8,6 +10,8 @@ import com.hdg.prysm.diff.PrDiff;
 import com.hdg.prysm.diff.PrDiffProvider;
 import com.hdg.prysm.review.PrReviewContext;
 import com.hdg.prysm.review.PrReviewContextLoader;
+import com.hdg.prysm.selection.ReviewFileSelectionResult;
+import com.hdg.prysm.selection.ReviewFileSelectionService;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.DefaultApplicationArguments;
 import org.springframework.mock.env.MockEnvironment;
@@ -29,15 +33,27 @@ class PrReviewRunnerTest {
         PrContextResolver resolver = mock(PrContextResolver.class);
         PrDiffProvider diffProvider = mock(PrDiffProvider.class);
         PrReviewContextLoader reviewContextLoader = mock(PrReviewContextLoader.class);
+        ReviewFileSelectionService selectionService = mock(ReviewFileSelectionService.class);
+        ReviewContextBudgetService budgetService = mock(ReviewContextBudgetService.class);
         MockEnvironment environment = new MockEnvironment()
                 .withProperty("GITHUB_ACTIONS", "true");
-        PrReviewRunner runner = new PrReviewRunner(resolver, diffProvider, reviewContextLoader, environment, false);
+        PrReviewRunner runner = new PrReviewRunner(
+                resolver,
+                diffProvider,
+                reviewContextLoader,
+                selectionService,
+                budgetService,
+                environment,
+                false
+        );
 
         runner.run(new DefaultApplicationArguments());
 
         verify(resolver, never()).resolve();
         verify(diffProvider, never()).fetch(org.mockito.ArgumentMatchers.any());
         verify(reviewContextLoader, never()).load(org.mockito.ArgumentMatchers.any());
+        verify(selectionService, never()).select(org.mockito.ArgumentMatchers.any());
+        verify(budgetService, never()).allocate(org.mockito.ArgumentMatchers.any());
     }
 
     /**
@@ -48,41 +64,70 @@ class PrReviewRunnerTest {
         PrContextResolver resolver = mock(PrContextResolver.class);
         PrDiffProvider diffProvider = mock(PrDiffProvider.class);
         PrReviewContextLoader reviewContextLoader = mock(PrReviewContextLoader.class);
+        ReviewFileSelectionService selectionService = mock(ReviewFileSelectionService.class);
+        ReviewContextBudgetService budgetService = mock(ReviewContextBudgetService.class);
         MockEnvironment environment = new MockEnvironment()
                 .withProperty("GITHUB_ACTIONS", "false");
-        PrReviewRunner runner = new PrReviewRunner(resolver, diffProvider, reviewContextLoader, environment, true);
+        PrReviewRunner runner = new PrReviewRunner(
+                resolver,
+                diffProvider,
+                reviewContextLoader,
+                selectionService,
+                budgetService,
+                environment,
+                true
+        );
 
         runner.run(new DefaultApplicationArguments());
 
         verify(resolver, never()).resolve();
         verify(diffProvider, never()).fetch(org.mockito.ArgumentMatchers.any());
         verify(reviewContextLoader, never()).load(org.mockito.ArgumentMatchers.any());
+        verify(selectionService, never()).select(org.mockito.ArgumentMatchers.any());
+        verify(budgetService, never()).allocate(org.mockito.ArgumentMatchers.any());
     }
 
     /**
-     * GitHub Actions 环境中启用 Runner 时，应解析当前 PR 上下文。
+     * GitHub Actions 环境中启用 Runner 时，应串起 PR5、PR6 和 PR7。
      */
     @Test
-    void shouldResolveContextWhenRunningInGithubActions() {
+    void shouldRunReviewContextSelectionAndBudgetWhenRunningInGithubActions() {
         PrContextResolver resolver = mock(PrContextResolver.class);
         PrDiffProvider diffProvider = mock(PrDiffProvider.class);
         PrReviewContextLoader reviewContextLoader = mock(PrReviewContextLoader.class);
+        ReviewFileSelectionService selectionService = mock(ReviewFileSelectionService.class);
+        ReviewContextBudgetService budgetService = mock(ReviewContextBudgetService.class);
         PrContext context = new PrContext("chinensdkcsdck", "PRysm", 3);
         PrDiff diff = new PrDiff(
                 context,
                 List.of(new PrChangedFile("README.md", PrChangedFileStatus.MODIFIED, 1, 1, "patch"))
         );
+        PrReviewContext reviewContext = new PrReviewContext(diff, List.of());
+        ReviewFileSelectionResult selectionResult = new ReviewFileSelectionResult(reviewContext, List.of());
+        ReviewContextBudgetResult budgetResult = new ReviewContextBudgetResult(selectionResult, List.of(), 32000);
         when(resolver.resolve()).thenReturn(context);
         when(diffProvider.fetch(context)).thenReturn(diff);
-        when(reviewContextLoader.load(diff)).thenReturn(new PrReviewContext(diff, List.of()));
+        when(reviewContextLoader.load(diff)).thenReturn(reviewContext);
+        when(selectionService.select(reviewContext)).thenReturn(selectionResult);
+        when(budgetService.allocate(selectionResult)).thenReturn(budgetResult);
         MockEnvironment environment = new MockEnvironment()
                 .withProperty("GITHUB_ACTIONS", "true");
-        PrReviewRunner runner = new PrReviewRunner(resolver, diffProvider, reviewContextLoader, environment, true);
+        PrReviewRunner runner = new PrReviewRunner(
+                resolver,
+                diffProvider,
+                reviewContextLoader,
+                selectionService,
+                budgetService,
+                environment,
+                true
+        );
 
         runner.run(new DefaultApplicationArguments());
 
         verify(resolver).resolve();
         verify(diffProvider).fetch(context);
         verify(reviewContextLoader).load(diff);
+        verify(selectionService).select(reviewContext);
+        verify(budgetService).allocate(selectionResult);
     }
 }
