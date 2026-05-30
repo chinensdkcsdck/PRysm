@@ -4,6 +4,8 @@ import com.hdg.prysm.context.PrContext;
 import com.hdg.prysm.context.PrContextResolver;
 import com.hdg.prysm.diff.PrDiff;
 import com.hdg.prysm.diff.PrDiffProvider;
+import com.hdg.prysm.review.PrReviewContext;
+import com.hdg.prysm.review.PrReviewContextLoader;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -24,6 +26,7 @@ public class PrReviewRunner implements ApplicationRunner {
 
     private final PrContextResolver prContextResolver;
     private final PrDiffProvider prDiffProvider;
+    private final PrReviewContextLoader prReviewContextLoader;
     private final Environment environment;
     private final boolean runnerEnabled;
 
@@ -33,11 +36,13 @@ public class PrReviewRunner implements ApplicationRunner {
     public PrReviewRunner(
             PrContextResolver prContextResolver,
             PrDiffProvider prDiffProvider,
+            PrReviewContextLoader prReviewContextLoader,
             Environment environment,
             @Value("${prysm.runner.enabled:true}") boolean runnerEnabled
     ) {
         this.prContextResolver = prContextResolver;
         this.prDiffProvider = prDiffProvider;
+        this.prReviewContextLoader = prReviewContextLoader;
         this.environment = environment;
         this.runnerEnabled = runnerEnabled;
     }
@@ -70,6 +75,13 @@ public class PrReviewRunner implements ApplicationRunner {
                 diff.getFileCount(),
                 diff.getTotalAdditions(),
                 diff.getTotalDeletions()
+        );
+
+        PrReviewContext reviewContext = prReviewContextLoader.load(diff);
+        log.info(
+                "Loaded review context: files={}, filesWithSnippets={}",
+                reviewContext.getFileCount(),
+                reviewContext.getFilesWithSnippetsCount()
         );
     }
 }

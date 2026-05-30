@@ -3,3 +3,11 @@ spring:
     name: Prysm
   main:
     web-application-type: none
+
+prysm:
+  review:
+    window-lines: 20
+    max-snippets-per-file: 3
+    max-file-context-chars: 8000
+    max-total-context-chars: 40000
+    max-file-size-bytes: 1048576
