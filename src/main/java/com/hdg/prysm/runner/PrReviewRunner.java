@@ -14,6 +14,7 @@ import com.hdg.prysm.execution.ReviewExecutionInput;
 import com.hdg.prysm.execution.RuleEngineResult;
 import com.hdg.prysm.github.GithubPullRequestCommentClient;
 import com.hdg.prysm.llm.LlmReviewRunner;
+import com.hdg.prysm.optimization.LlmOptimizationProperties;
 import com.hdg.prysm.review.PrReviewContext;
 import com.hdg.prysm.review.PrReviewContextLoader;
 import com.hdg.prysm.result.ReviewAggregationResult;
@@ -56,6 +57,7 @@ public class PrReviewRunner implements ApplicationRunner {
     private final ReviewResultAggregator reviewResultAggregator;
     private final ReviewCommentRenderer reviewCommentRenderer;
     private final GithubPullRequestCommentClient githubPullRequestCommentClient;
+    private final LlmOptimizationProperties optimizationProperties;
     private final TraceRecorder traceRecorder;
     private final TraceReporter traceReporter;
     private final Environment environment;
@@ -79,6 +81,7 @@ public class PrReviewRunner implements ApplicationRunner {
             ReviewResultAggregator reviewResultAggregator,
             ReviewCommentRenderer reviewCommentRenderer,
             GithubPullRequestCommentClient githubPullRequestCommentClient,
+            LlmOptimizationProperties optimizationProperties,
             TraceRecorder traceRecorder,
             TraceReporter traceReporter,
             Environment environment,
@@ -98,6 +101,7 @@ public class PrReviewRunner implements ApplicationRunner {
         this.reviewResultAggregator = reviewResultAggregator;
         this.reviewCommentRenderer = reviewCommentRenderer;
         this.githubPullRequestCommentClient = githubPullRequestCommentClient;
+        this.optimizationProperties = optimizationProperties;
         this.traceRecorder = traceRecorder;
         this.traceReporter = traceReporter;
         this.environment = environment;
@@ -276,6 +280,16 @@ public class PrReviewRunner implements ApplicationRunner {
         llmSpan
                 .put("llmFindings", llmResult.getFindings().size())
                 .put("modelName", llmModel)
+                .put("effectiveModel", llmModel)
+                .put("optimizationGroup", optimizationProperties.getGroup())
+                .put("rolloutPercent", optimizationProperties.getRolloutPercent())
+                .put("maxOutputTokensEnabled", optimizationProperties.isMaxOutputTokensEnabled())
+                .put("maxOutputTokens", optimizationProperties.getMaxOutputTokens())
+                .put("fastPathEnabled", optimizationProperties.isFastPathEnabled())
+                .put("fastPathMode", optimizationProperties.getFastPathMode())
+                .put("fastModel", optimizationProperties.getFastModel())
+                .put("fastPathMatched", false)
+                .put("compactPromptEnabled", optimizationProperties.isCompactPromptEnabled())
                 .put("promptCharacters", llmPromptCharacters)
                 .put("estimatedPromptTokens", estimateTokens(llmPromptCharacters))
                 .put("tokenSource", "estimated")

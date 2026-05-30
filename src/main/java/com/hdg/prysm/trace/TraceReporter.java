@@ -80,6 +80,9 @@ public class TraceReporter {
         putNullable(root, "estimatedPromptTokens", summary.getEstimatedPromptTokens());
         putNullable(root, "tokenSource", summary.getTokenSource());
         putNullable(root, "commentWritten", summary.getCommentWritten());
+        putNullable(root, "optimizationGroup", summary.getOptimizationGroup());
+        putNullable(root, "modelName", summary.getModelName());
+        putNullable(root, "effectiveModel", summary.getEffectiveModel());
         return root;
     }
 
