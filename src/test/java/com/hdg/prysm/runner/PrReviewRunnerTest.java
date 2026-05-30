@@ -10,12 +10,20 @@ import com.hdg.prysm.diff.PrChangedFileStatus;
 import com.hdg.prysm.diff.PrDiff;
 import com.hdg.prysm.diff.PrDiffProvider;
 import com.hdg.prysm.enrichment.ReviewContextEnrichmentService;
+import com.hdg.prysm.comment.ReviewCommentRenderer;
 import com.hdg.prysm.execution.ContextStatus;
 import com.hdg.prysm.execution.ContextStatusCode;
+import com.hdg.prysm.execution.LlmReviewResult;
 import com.hdg.prysm.execution.PromptPayload;
 import com.hdg.prysm.execution.ReviewExecutionInput;
+import com.hdg.prysm.execution.RuleEngineResult;
+import com.hdg.prysm.github.GithubPullRequestCommentClient;
+import com.hdg.prysm.llm.LlmReviewRunner;
 import com.hdg.prysm.review.PrReviewContext;
 import com.hdg.prysm.review.PrReviewContextLoader;
+import com.hdg.prysm.result.ReviewAggregationResult;
+import com.hdg.prysm.result.ReviewResultAggregator;
+import com.hdg.prysm.rule.RuleEngineRunner;
 import com.hdg.prysm.selection.ReviewFileSelectionResult;
 import com.hdg.prysm.selection.ReviewFileSelectionService;
 import org.junit.jupiter.api.Test;
@@ -43,6 +51,11 @@ class PrReviewRunnerTest {
         ReviewContextBudgetService budgetService = mock(ReviewContextBudgetService.class);
         ReviewExecutionInputAssembler inputAssembler = mock(ReviewExecutionInputAssembler.class);
         ReviewContextEnrichmentService enrichmentService = mock(ReviewContextEnrichmentService.class);
+        RuleEngineRunner ruleEngineRunner = mock(RuleEngineRunner.class);
+        LlmReviewRunner llmReviewRunner = mock(LlmReviewRunner.class);
+        ReviewResultAggregator aggregator = mock(ReviewResultAggregator.class);
+        ReviewCommentRenderer commentRenderer = mock(ReviewCommentRenderer.class);
+        GithubPullRequestCommentClient commentClient = mock(GithubPullRequestCommentClient.class);
         MockEnvironment environment = new MockEnvironment()
                 .withProperty("GITHUB_ACTIONS", "true");
         PrReviewRunner runner = new PrReviewRunner(
@@ -53,8 +66,14 @@ class PrReviewRunnerTest {
                 budgetService,
                 inputAssembler,
                 enrichmentService,
+                ruleEngineRunner,
+                llmReviewRunner,
+                aggregator,
+                commentRenderer,
+                commentClient,
                 environment,
-                false
+                false,
+                true
         );
 
         runner.run(new DefaultApplicationArguments());
@@ -66,6 +85,11 @@ class PrReviewRunnerTest {
         verify(budgetService, never()).allocate(org.mockito.ArgumentMatchers.any());
         verify(inputAssembler, never()).assemble(org.mockito.ArgumentMatchers.any());
         verify(enrichmentService, never()).enrich(org.mockito.ArgumentMatchers.any());
+        verify(ruleEngineRunner, never()).run(org.mockito.ArgumentMatchers.any());
+        verify(llmReviewRunner, never()).run(org.mockito.ArgumentMatchers.any());
+        verify(aggregator, never()).aggregate(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any());
+        verify(commentRenderer, never()).render(org.mockito.ArgumentMatchers.any());
+        verify(commentClient, never()).createComment(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any());
     }
 
     /**
@@ -80,6 +104,11 @@ class PrReviewRunnerTest {
         ReviewContextBudgetService budgetService = mock(ReviewContextBudgetService.class);
         ReviewExecutionInputAssembler inputAssembler = mock(ReviewExecutionInputAssembler.class);
         ReviewContextEnrichmentService enrichmentService = mock(ReviewContextEnrichmentService.class);
+        RuleEngineRunner ruleEngineRunner = mock(RuleEngineRunner.class);
+        LlmReviewRunner llmReviewRunner = mock(LlmReviewRunner.class);
+        ReviewResultAggregator aggregator = mock(ReviewResultAggregator.class);
+        ReviewCommentRenderer commentRenderer = mock(ReviewCommentRenderer.class);
+        GithubPullRequestCommentClient commentClient = mock(GithubPullRequestCommentClient.class);
         MockEnvironment environment = new MockEnvironment()
                 .withProperty("GITHUB_ACTIONS", "false");
         PrReviewRunner runner = new PrReviewRunner(
@@ -90,7 +119,13 @@ class PrReviewRunnerTest {
                 budgetService,
                 inputAssembler,
                 enrichmentService,
+                ruleEngineRunner,
+                llmReviewRunner,
+                aggregator,
+                commentRenderer,
+                commentClient,
                 environment,
+                true,
                 true
         );
 
@@ -103,6 +138,11 @@ class PrReviewRunnerTest {
         verify(budgetService, never()).allocate(org.mockito.ArgumentMatchers.any());
         verify(inputAssembler, never()).assemble(org.mockito.ArgumentMatchers.any());
         verify(enrichmentService, never()).enrich(org.mockito.ArgumentMatchers.any());
+        verify(ruleEngineRunner, never()).run(org.mockito.ArgumentMatchers.any());
+        verify(llmReviewRunner, never()).run(org.mockito.ArgumentMatchers.any());
+        verify(aggregator, never()).aggregate(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any());
+        verify(commentRenderer, never()).render(org.mockito.ArgumentMatchers.any());
+        verify(commentClient, never()).createComment(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any());
     }
 
     /**
@@ -117,6 +157,11 @@ class PrReviewRunnerTest {
         ReviewContextBudgetService budgetService = mock(ReviewContextBudgetService.class);
         ReviewExecutionInputAssembler inputAssembler = mock(ReviewExecutionInputAssembler.class);
         ReviewContextEnrichmentService enrichmentService = mock(ReviewContextEnrichmentService.class);
+        RuleEngineRunner ruleEngineRunner = mock(RuleEngineRunner.class);
+        LlmReviewRunner llmReviewRunner = mock(LlmReviewRunner.class);
+        ReviewResultAggregator aggregator = mock(ReviewResultAggregator.class);
+        ReviewCommentRenderer commentRenderer = mock(ReviewCommentRenderer.class);
+        GithubPullRequestCommentClient commentClient = mock(GithubPullRequestCommentClient.class);
         PrContext context = new PrContext("chinensdkcsdck", "PRysm", 3);
         PrDiff diff = new PrDiff(
                 context,
@@ -132,6 +177,16 @@ class PrReviewRunnerTest {
                 new ContextStatus(ContextStatusCode.SKIPPED, "no files selected"),
                 new PromptPayload("system", "user", "{}")
         );
+        RuleEngineResult ruleResult = new RuleEngineResult(List.of(), "no rule findings");
+        LlmReviewResult llmResult = new LlmReviewResult(List.of(), "no llm findings", null);
+        ReviewAggregationResult aggregationResult = new ReviewAggregationResult(
+                List.of(),
+                0,
+                0,
+                0,
+                ruleResult.getSummary(),
+                llmResult.getSummary()
+        );
         when(resolver.resolve()).thenReturn(context);
         when(diffProvider.fetch(context)).thenReturn(diff);
         when(reviewContextLoader.load(diff)).thenReturn(reviewContext);
@@ -139,6 +194,10 @@ class PrReviewRunnerTest {
         when(budgetService.allocate(selectionResult)).thenReturn(budgetResult);
         when(inputAssembler.assemble(budgetResult)).thenReturn(executionInput);
         when(enrichmentService.enrich(executionInput)).thenReturn(executionInput);
+        when(ruleEngineRunner.run(executionInput)).thenReturn(ruleResult);
+        when(llmReviewRunner.run(executionInput)).thenReturn(llmResult);
+        when(aggregator.aggregate(executionInput, ruleResult, llmResult)).thenReturn(aggregationResult);
+        when(commentRenderer.render(aggregationResult)).thenReturn("review comment");
         MockEnvironment environment = new MockEnvironment()
                 .withProperty("GITHUB_ACTIONS", "true");
         PrReviewRunner runner = new PrReviewRunner(
@@ -149,7 +208,13 @@ class PrReviewRunnerTest {
                 budgetService,
                 inputAssembler,
                 enrichmentService,
+                ruleEngineRunner,
+                llmReviewRunner,
+                aggregator,
+                commentRenderer,
+                commentClient,
                 environment,
+                true,
                 true
         );
 
@@ -162,5 +227,84 @@ class PrReviewRunnerTest {
         verify(budgetService).allocate(selectionResult);
         verify(inputAssembler).assemble(budgetResult);
         verify(enrichmentService).enrich(executionInput);
+        verify(ruleEngineRunner).run(executionInput);
+        verify(llmReviewRunner).run(executionInput);
+        verify(aggregator).aggregate(executionInput, ruleResult, llmResult);
+        verify(commentRenderer).render(aggregationResult);
+        verify(commentClient).createComment(context, "review comment");
+    }
+
+    /**
+     * 评论回写关闭时，仍完成 PR12 聚合和渲染，但不调用 GitHub 回写。
+     */
+    @Test
+    void shouldSkipGithubCommentWhenCommentWritingIsDisabled() {
+        PrContextResolver resolver = mock(PrContextResolver.class);
+        PrDiffProvider diffProvider = mock(PrDiffProvider.class);
+        PrReviewContextLoader reviewContextLoader = mock(PrReviewContextLoader.class);
+        ReviewFileSelectionService selectionService = mock(ReviewFileSelectionService.class);
+        ReviewContextBudgetService budgetService = mock(ReviewContextBudgetService.class);
+        ReviewExecutionInputAssembler inputAssembler = mock(ReviewExecutionInputAssembler.class);
+        RuleEngineRunner ruleEngineRunner = mock(RuleEngineRunner.class);
+        LlmReviewRunner llmReviewRunner = mock(LlmReviewRunner.class);
+        ReviewResultAggregator aggregator = mock(ReviewResultAggregator.class);
+        ReviewCommentRenderer commentRenderer = mock(ReviewCommentRenderer.class);
+        GithubPullRequestCommentClient commentClient = mock(GithubPullRequestCommentClient.class);
+        PrContext context = new PrContext("chinensdkcsdck", "PRysm", 3);
+        PrDiff diff = new PrDiff(context, List.of());
+        PrReviewContext reviewContext = new PrReviewContext(diff, List.of());
+        ReviewFileSelectionResult selectionResult = new ReviewFileSelectionResult(reviewContext, List.of());
+        ReviewContextBudgetResult budgetResult = new ReviewContextBudgetResult(selectionResult, List.of(), 32000);
+        ReviewExecutionInput executionInput = new ReviewExecutionInput(
+                context,
+                diff,
+                List.of(),
+                new ContextStatus(ContextStatusCode.SKIPPED, "no files selected"),
+                new PromptPayload("system", "user", "{}")
+        );
+        RuleEngineResult ruleResult = new RuleEngineResult(List.of(), "no rule findings");
+        LlmReviewResult llmResult = new LlmReviewResult(List.of(), "no llm findings", null);
+        ReviewAggregationResult aggregationResult = new ReviewAggregationResult(
+                List.of(),
+                0,
+                0,
+                0,
+                ruleResult.getSummary(),
+                llmResult.getSummary()
+        );
+        when(resolver.resolve()).thenReturn(context);
+        when(diffProvider.fetch(context)).thenReturn(diff);
+        when(reviewContextLoader.load(diff)).thenReturn(reviewContext);
+        when(selectionService.select(reviewContext)).thenReturn(selectionResult);
+        when(budgetService.allocate(selectionResult)).thenReturn(budgetResult);
+        when(inputAssembler.assemble(budgetResult)).thenReturn(executionInput);
+        when(ruleEngineRunner.run(executionInput)).thenReturn(ruleResult);
+        when(llmReviewRunner.run(executionInput)).thenReturn(llmResult);
+        when(aggregator.aggregate(executionInput, ruleResult, llmResult)).thenReturn(aggregationResult);
+        when(commentRenderer.render(aggregationResult)).thenReturn("review comment");
+        MockEnvironment environment = new MockEnvironment()
+                .withProperty("GITHUB_ACTIONS", "true");
+        PrReviewRunner runner = new PrReviewRunner(
+                resolver,
+                diffProvider,
+                reviewContextLoader,
+                selectionService,
+                budgetService,
+                inputAssembler,
+                ruleEngineRunner,
+                llmReviewRunner,
+                aggregator,
+                commentRenderer,
+                commentClient,
+                environment,
+                true,
+                false
+        );
+
+        runner.run(new DefaultApplicationArguments());
+
+        verify(aggregator).aggregate(executionInput, ruleResult, llmResult);
+        verify(commentRenderer).render(aggregationResult);
+        verify(commentClient, never()).createComment(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any());
     }
 }
