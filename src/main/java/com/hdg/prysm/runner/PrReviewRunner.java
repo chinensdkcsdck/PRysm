@@ -1,11 +1,13 @@
 package com.hdg.prysm.runner;
 
+import com.hdg.prysm.assembly.ReviewExecutionInputAssembler;
 import com.hdg.prysm.budget.ReviewContextBudgetResult;
 import com.hdg.prysm.budget.ReviewContextBudgetService;
 import com.hdg.prysm.context.PrContext;
 import com.hdg.prysm.context.PrContextResolver;
 import com.hdg.prysm.diff.PrDiff;
 import com.hdg.prysm.diff.PrDiffProvider;
+import com.hdg.prysm.execution.ReviewExecutionInput;
 import com.hdg.prysm.review.PrReviewContext;
 import com.hdg.prysm.review.PrReviewContextLoader;
 import com.hdg.prysm.selection.ReviewFileSelectionResult;
@@ -33,6 +35,7 @@ public class PrReviewRunner implements ApplicationRunner {
     private final PrReviewContextLoader prReviewContextLoader;
     private final ReviewFileSelectionService reviewFileSelectionService;
     private final ReviewContextBudgetService reviewContextBudgetService;
+    private final ReviewExecutionInputAssembler reviewExecutionInputAssembler;
     private final Environment environment;
     private final boolean runnerEnabled;
 
@@ -45,6 +48,7 @@ public class PrReviewRunner implements ApplicationRunner {
             PrReviewContextLoader prReviewContextLoader,
             ReviewFileSelectionService reviewFileSelectionService,
             ReviewContextBudgetService reviewContextBudgetService,
+            ReviewExecutionInputAssembler reviewExecutionInputAssembler,
             Environment environment,
             @Value("${prysm.runner.enabled:true}") boolean runnerEnabled
     ) {
@@ -53,6 +57,7 @@ public class PrReviewRunner implements ApplicationRunner {
         this.prReviewContextLoader = prReviewContextLoader;
         this.reviewFileSelectionService = reviewFileSelectionService;
         this.reviewContextBudgetService = reviewContextBudgetService;
+        this.reviewExecutionInputAssembler = reviewExecutionInputAssembler;
         this.environment = environment;
         this.runnerEnabled = runnerEnabled;
     }
@@ -109,6 +114,14 @@ public class PrReviewRunner implements ApplicationRunner {
                 budgetResult.getUsedCharacters(),
                 budgetResult.getRemainingCharacters(),
                 budgetResult.isTruncated()
+        );
+
+        ReviewExecutionInput executionInput = reviewExecutionInputAssembler.assemble(budgetResult);
+        log.info(
+                "Assembled review execution input: files={}, contextStatus={}, promptCharacters={}",
+                executionInput.getFiles().size(),
+                executionInput.getContextStatus().getCode(),
+                executionInput.getPromptPayload().getUserPrompt().length()
         );
     }
 }
