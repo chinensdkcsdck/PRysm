@@ -6,6 +6,7 @@ spring:
 
 prysm:
   review:
+    repository-root: ${PRYSM_WORKSPACE_ROOT:${user.dir}}
     window-lines: 20
     max-snippets-per-file: 3
     max-file-context-chars: 8000

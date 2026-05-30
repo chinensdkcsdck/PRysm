@@ -1,0 +1,68 @@
+name: Prysm Reusable PR Review
+
+on:
+  workflow_call:
+    inputs:
+      prysm-repository:
+        required: false
+        type: string
+        default: Remohdg/PRysm-hdg
+      prysm-ref:
+        required: false
+        type: string
+        default: main
+      llm-api-base-url:
+        required: false
+        type: string
+        default: https://dashscope.aliyuncs.com/compatible-mode/v1
+      llm-model:
+        required: false
+        type: string
+        default: qwen-plus
+    secrets:
+      LLM_API_KEY:
+        required: true
+
+jobs:
+  review:
+    name: Run Prysm Review
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
+      pull-requests: read
+      issues: write
+
+    steps:
+      - name: Checkout target repository
+        uses: actions/checkout@v4
+        with:
+          path: target-repo
+
+      - name: Checkout Prysm
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ inputs.prysm-repository }}
+          ref: ${{ inputs.prysm-ref }}
+          path: prysm
+
+      - name: Set up Java 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+          cache: maven
+
+      - name: Build Prysm
+        working-directory: prysm
+        run: bash ./mvnw -q -DskipTests package
+
+      - name: Run Prysm
+        working-directory: prysm
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          LLM_API_KEY: ${{ secrets.LLM_API_KEY }}
+          LLM_API_BASE_URL: ${{ inputs.llm-api-base-url }}
+          LLM_MODEL: ${{ inputs.llm-model }}
+          PRYSM_WORKSPACE_ROOT: ${{ github.workspace }}/target-repo
+        run: java -jar target/*.jar
