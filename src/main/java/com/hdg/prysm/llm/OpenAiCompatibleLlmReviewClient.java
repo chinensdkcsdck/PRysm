@@ -1,6 +1,7 @@
 package com.hdg.prysm.llm;
 
 import com.hdg.prysm.execution.PromptPayload;
+import com.hdg.prysm.optimization.LlmOptimizationProperties;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.env.Environment;
@@ -31,6 +32,7 @@ public class OpenAiCompatibleLlmReviewClient implements LlmReviewClient {
     private final String apiBaseUrl;
     private final String model;
     private final int timeoutSeconds;
+    private final LlmOptimizationProperties optimizationProperties;
 
     /**
      * 注入运行环境、JSON 解析器和模型调用配置。
@@ -41,7 +43,8 @@ public class OpenAiCompatibleLlmReviewClient implements LlmReviewClient {
             ObjectMapper objectMapper,
             @Value("${prysm.llm.api-base-url:https://api.openai.com/v1}") String apiBaseUrl,
             @Value("${prysm.llm.model:gpt-4.1-mini}") String model,
-            @Value("${prysm.llm.timeout-seconds:60}") int timeoutSeconds
+            @Value("${prysm.llm.timeout-seconds:60}") int timeoutSeconds,
+            LlmOptimizationProperties optimizationProperties
     ) {
         this(
                 environment,
@@ -51,7 +54,8 @@ public class OpenAiCompatibleLlmReviewClient implements LlmReviewClient {
                         .build(),
                 apiBaseUrl,
                 model,
-                timeoutSeconds
+                timeoutSeconds,
+                optimizationProperties
         );
     }
 
@@ -61,10 +65,50 @@ public class OpenAiCompatibleLlmReviewClient implements LlmReviewClient {
     OpenAiCompatibleLlmReviewClient(
             Environment environment,
             ObjectMapper objectMapper,
+            String apiBaseUrl,
+            String model,
+            int timeoutSeconds
+    ) {
+        this(
+                environment,
+                objectMapper,
+                HttpClient.newBuilder()
+                        .connectTimeout(Duration.ofSeconds(timeoutSeconds))
+                        .build(),
+                apiBaseUrl,
+                model,
+                timeoutSeconds,
+                baselineOptimizationProperties()
+        );
+    }
+
+    OpenAiCompatibleLlmReviewClient(
+            Environment environment,
+            ObjectMapper objectMapper,
             HttpClient httpClient,
             String apiBaseUrl,
             String model,
             int timeoutSeconds
+    ) {
+        this(
+                environment,
+                objectMapper,
+                httpClient,
+                apiBaseUrl,
+                model,
+                timeoutSeconds,
+                baselineOptimizationProperties()
+        );
+    }
+
+    OpenAiCompatibleLlmReviewClient(
+            Environment environment,
+            ObjectMapper objectMapper,
+            HttpClient httpClient,
+            String apiBaseUrl,
+            String model,
+            int timeoutSeconds,
+            LlmOptimizationProperties optimizationProperties
     ) {
         if (environment == null) {
             throw new IllegalArgumentException("Environment must not be null");
@@ -84,6 +128,9 @@ public class OpenAiCompatibleLlmReviewClient implements LlmReviewClient {
         if (timeoutSeconds <= 0) {
             throw new IllegalArgumentException("LLM timeout seconds must be positive");
         }
+        if (optimizationProperties == null) {
+            throw new IllegalArgumentException("Optimization properties must not be null");
+        }
 
         this.environment = environment;
         this.objectMapper = objectMapper;
@@ -91,6 +138,7 @@ public class OpenAiCompatibleLlmReviewClient implements LlmReviewClient {
         this.apiBaseUrl = trimTrailingSlash(apiBaseUrl);
         this.model = model;
         this.timeoutSeconds = timeoutSeconds;
+        this.optimizationProperties = optimizationProperties;
     }
 
     /**
@@ -131,6 +179,9 @@ public class OpenAiCompatibleLlmReviewClient implements LlmReviewClient {
         ObjectNode root = objectMapper.createObjectNode();
         root.put("model", model);
         root.put("temperature", 0);
+        if (optimizationProperties.isMaxOutputTokensEnabled()) {
+            root.put("max_tokens", optimizationProperties.getMaxOutputTokens());
+        }
 
         ArrayNode messages = root.putArray("messages");
         messages.add(message("system", promptPayload.getSystemPrompt()));
@@ -196,5 +247,18 @@ public class OpenAiCompatibleLlmReviewClient implements LlmReviewClient {
             return trimmed.substring(0, trimmed.length() - 1);
         }
         return trimmed;
+    }
+
+    private static LlmOptimizationProperties baselineOptimizationProperties() {
+        return new LlmOptimizationProperties(
+                "baseline",
+                0,
+                false,
+                800,
+                false,
+                "fast_model",
+                "qwen-turbo",
+                false
+        );
     }
 }
