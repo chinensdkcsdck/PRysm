@@ -1,11 +1,15 @@
 package com.hdg.prysm.runner;
 
+import com.hdg.prysm.budget.ReviewContextBudgetResult;
+import com.hdg.prysm.budget.ReviewContextBudgetService;
 import com.hdg.prysm.context.PrContext;
 import com.hdg.prysm.context.PrContextResolver;
 import com.hdg.prysm.diff.PrDiff;
 import com.hdg.prysm.diff.PrDiffProvider;
 import com.hdg.prysm.review.PrReviewContext;
 import com.hdg.prysm.review.PrReviewContextLoader;
+import com.hdg.prysm.selection.ReviewFileSelectionResult;
+import com.hdg.prysm.selection.ReviewFileSelectionService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -27,6 +31,8 @@ public class PrReviewRunner implements ApplicationRunner {
     private final PrContextResolver prContextResolver;
     private final PrDiffProvider prDiffProvider;
     private final PrReviewContextLoader prReviewContextLoader;
+    private final ReviewFileSelectionService reviewFileSelectionService;
+    private final ReviewContextBudgetService reviewContextBudgetService;
     private final Environment environment;
     private final boolean runnerEnabled;
 
@@ -37,12 +43,16 @@ public class PrReviewRunner implements ApplicationRunner {
             PrContextResolver prContextResolver,
             PrDiffProvider prDiffProvider,
             PrReviewContextLoader prReviewContextLoader,
+            ReviewFileSelectionService reviewFileSelectionService,
+            ReviewContextBudgetService reviewContextBudgetService,
             Environment environment,
             @Value("${prysm.runner.enabled:true}") boolean runnerEnabled
     ) {
         this.prContextResolver = prContextResolver;
         this.prDiffProvider = prDiffProvider;
         this.prReviewContextLoader = prReviewContextLoader;
+        this.reviewFileSelectionService = reviewFileSelectionService;
+        this.reviewContextBudgetService = reviewContextBudgetService;
         this.environment = environment;
         this.runnerEnabled = runnerEnabled;
     }
@@ -82,6 +92,23 @@ public class PrReviewRunner implements ApplicationRunner {
                 "Loaded review context: files={}, filesWithSnippets={}",
                 reviewContext.getFileCount(),
                 reviewContext.getFilesWithSnippetsCount()
+        );
+
+        ReviewFileSelectionResult selectionResult = reviewFileSelectionService.select(reviewContext);
+        log.info(
+                "Selected review files: selected={}, rejected={}",
+                selectionResult.getSelectedFiles().size(),
+                selectionResult.getRejectedFiles().size()
+        );
+
+        ReviewContextBudgetResult budgetResult = reviewContextBudgetService.allocate(selectionResult);
+        log.info(
+                "Allocated review context budget: selected={}, skipped={}, usedCharacters={}, remainingCharacters={}, truncated={}",
+                budgetResult.getSelectedFiles().size(),
+                budgetResult.getSkippedFiles().size(),
+                budgetResult.getUsedCharacters(),
+                budgetResult.getRemainingCharacters(),
+                budgetResult.isTruncated()
         );
     }
 }
