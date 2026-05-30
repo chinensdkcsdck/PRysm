@@ -11,7 +11,7 @@ jobs:
 
     permissions:
       contents: read
-      pull-requests: read
+      pull-requests: write
       issues: write
 
     steps:
@@ -37,4 +37,12 @@ jobs:
           LLM_API_KEY: ${{ secrets.LLM_API_KEY }}
           LLM_API_BASE_URL: ${{ vars.LLM_API_BASE_URL || 'https://dashscope.aliyuncs.com/compatible-mode/v1' }}
           LLM_MODEL: ${{ vars.LLM_MODEL || 'qwen-plus' }}
+          PRYSM_OPT_GROUP: ${{ vars.PRYSM_OPT_GROUP || 'baseline' }}
+          PRYSM_OPT_ROLLOUT_PERCENT: ${{ vars.PRYSM_OPT_ROLLOUT_PERCENT || '0' }}
+          PRYSM_OPT_MAX_OUTPUT_TOKENS_ENABLED: ${{ vars.PRYSM_OPT_MAX_OUTPUT_TOKENS_ENABLED || 'false' }}
+          PRYSM_LLM_MAX_OUTPUT_TOKENS: ${{ vars.PRYSM_LLM_MAX_OUTPUT_TOKENS || '800' }}
+          PRYSM_OPT_FAST_PATH_ENABLED: ${{ vars.PRYSM_OPT_FAST_PATH_ENABLED || 'false' }}
+          PRYSM_OPT_FAST_PATH_MODE: ${{ vars.PRYSM_OPT_FAST_PATH_MODE || 'fast_model' }}
+          PRYSM_LLM_FAST_MODEL: ${{ vars.PRYSM_LLM_FAST_MODEL || 'qwen-turbo' }}
+          PRYSM_OPT_COMPACT_PROMPT_ENABLED: ${{ vars.PRYSM_OPT_COMPACT_PROMPT_ENABLED || 'false' }}
         run: java -jar target/*.jar

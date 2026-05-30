@@ -38,6 +38,12 @@ class TraceReporterTest {
         span.put("commentWritten", false);
         span.finish(TraceStatus.SKIPPED, Instant.now());
         context.addSpan(span);
+        TraceSpan llm = new TraceSpan("llm_review", Instant.now());
+        llm.put("optimizationGroup", "baseline");
+        llm.put("modelName", "qwen-plus");
+        llm.put("effectiveModel", "qwen-plus");
+        llm.finish(TraceStatus.SUCCESS, Instant.now());
+        context.addSpan(llm);
 
         JsonNode json = objectMapper.readTree(reporter.toJson(new TraceSummary(context)));
 
@@ -46,5 +52,8 @@ class TraceReporterTest {
         assertEquals("trace-1", json.get("traceId").asText());
         assertEquals("SUCCESS", json.get("status").asText());
         assertEquals(false, json.get("commentWritten").asBoolean());
+        assertEquals("baseline", json.get("optimizationGroup").asText());
+        assertEquals("qwen-plus", json.get("modelName").asText());
+        assertEquals("qwen-plus", json.get("effectiveModel").asText());
     }
 }

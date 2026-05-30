@@ -1,6 +1,9 @@
 package com.hdg.prysm.llm;
 
 import com.hdg.prysm.execution.PromptPayload;
+import com.hdg.prysm.optimization.LlmOptimizationContext;
+import com.hdg.prysm.optimization.LlmOptimizationDecision;
+import com.hdg.prysm.optimization.LlmOptimizationProperties;
 import org.junit.jupiter.api.Test;
 import org.springframework.mock.env.MockEnvironment;
 import tools.jackson.databind.JsonNode;
@@ -122,6 +125,104 @@ class OpenAiCompatibleLlmReviewClientTest {
         assertEquals("json_object", root.get("response_format").get("type").asText());
         assertEquals("system", root.get("messages").get(0).get("role").asText());
         assertTrue(root.get("messages").get(1).get("content").asText().contains("Output schema"));
+        assertTrue(root.get("max_tokens") == null);
+    }
+
+    /**
+     * 开启 max-output-tokens 灰度时，请求体应携带 max_tokens。
+     */
+    @Test
+    void shouldIncludeMaxTokensWhenOptimizationIsEnabled() throws Exception {
+        AtomicReference<HttpRequest> capturedRequest = new AtomicReference<>();
+        OpenAiCompatibleLlmReviewClient client = new OpenAiCompatibleLlmReviewClient(
+                new MockEnvironment().withProperty("LLM_API_KEY", "secret"),
+                new ObjectMapper(),
+                new FakeHttpClient(
+                        200,
+                        """
+                        {
+                          "choices": [
+                            {
+                              "message": {
+                                "content": "{\\"summary\\":\\"ok\\",\\"findings\\":[]}"
+                              }
+                            }
+                          ]
+                        }
+                        """,
+                        capturedRequest
+                ),
+                "https://api.example.com/v1",
+                "test-model",
+                30,
+                new LlmOptimizationProperties(
+                        "exp_1_max_output_tokens",
+                        0,
+                        true,
+                        512,
+                        false,
+                        "fast_model",
+                        "qwen-turbo",
+                        false
+                )
+        );
+
+        client.review(newPromptPayload());
+        JsonNode root = new ObjectMapper().readTree(readBody(capturedRequest.get()));
+
+        assertEquals(512, root.get("max_tokens").asInt());
+    }
+
+    /**
+     * fast-path 命中时，请求体应使用本次决策的有效模型。
+     */
+    @Test
+    void shouldUseEffectiveModelFromOptimizationDecision() throws Exception {
+        AtomicReference<HttpRequest> capturedRequest = new AtomicReference<>();
+        LlmOptimizationContext optimizationContext = new LlmOptimizationContext();
+        optimizationContext.setCurrentDecision(LlmOptimizationDecision.fastPath(
+                "test-model",
+                "fast-model",
+                "small_doc_or_workflow_pr"
+        ));
+        OpenAiCompatibleLlmReviewClient client = new OpenAiCompatibleLlmReviewClient(
+                new MockEnvironment().withProperty("LLM_API_KEY", "secret"),
+                new ObjectMapper(),
+                new FakeHttpClient(
+                        200,
+                        """
+                        {
+                          "choices": [
+                            {
+                              "message": {
+                                "content": "{\\"summary\\":\\"ok\\",\\"findings\\":[]}"
+                              }
+                            }
+                          ]
+                        }
+                        """,
+                        capturedRequest
+                ),
+                "https://api.example.com/v1",
+                "test-model",
+                30,
+                new LlmOptimizationProperties(
+                        "exp_2_fast_path",
+                        0,
+                        false,
+                        800,
+                        true,
+                        "fast_model",
+                        "fast-model",
+                        false
+                ),
+                optimizationContext
+        );
+
+        client.review(newPromptPayload());
+        JsonNode root = new ObjectMapper().readTree(readBody(capturedRequest.get()));
+
+        assertEquals("fast-model", root.get("model").asText());
     }
 
     /**

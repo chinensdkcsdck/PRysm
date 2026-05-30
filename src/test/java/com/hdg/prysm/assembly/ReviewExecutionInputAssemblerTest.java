@@ -9,6 +9,8 @@ import com.hdg.prysm.diff.PrDiff;
 import com.hdg.prysm.execution.ContextStatusCode;
 import com.hdg.prysm.execution.ReviewExecutionInput;
 import com.hdg.prysm.execution.ReviewTargetFile;
+import com.hdg.prysm.optimization.LlmOptimizationContext;
+import com.hdg.prysm.optimization.LlmOptimizationProperties;
 import com.hdg.prysm.review.PrReviewContext;
 import com.hdg.prysm.review.PrReviewFileContext;
 import com.hdg.prysm.selection.ReviewFileSelection;
@@ -23,7 +25,11 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class ReviewExecutionInputAssemblerTest {
 
-    private final ReviewExecutionInputAssembler assembler = new ReviewExecutionInputAssembler();
+    private final LlmOptimizationContext optimizationContext = new LlmOptimizationContext();
+    private final ReviewExecutionInputAssembler assembler = new ReviewExecutionInputAssembler(
+            optimizationProperties(false),
+            optimizationContext
+    );
 
     /**
      * 组装器应把 PR7 预算结果转换成 B 线可消费的 ReviewExecutionInput。
@@ -138,11 +144,53 @@ class ReviewExecutionInputAssemblerTest {
     }
 
     /**
+     * compact prompt 开启时应生成更短的 prompt 和 schema，并记录压缩指标。
+     */
+    @Test
+    void shouldBuildCompactPromptWhenOptimizationIsEnabled() {
+        LlmOptimizationContext compactContext = new LlmOptimizationContext();
+        ReviewExecutionInputAssembler compactAssembler = new ReviewExecutionInputAssembler(
+                optimizationProperties(true),
+                compactContext
+        );
+        ReviewContextBudgetResult budgetResult = budgetResult(List.of(selectedBudgetFile(
+                "README.md",
+                "@@ -1,1 +1,2 @@\n+updated docs",
+                "updated docs",
+                false,
+                null
+        )));
+
+        ReviewExecutionInput input = compactAssembler.assemble(budgetResult);
+
+        assertTrue(input.getPromptPayload().getUserPrompt().contains("PR owner/repo#8"));
+        assertTrue(input.getPromptPayload().getUserPrompt().contains("Budget: used="));
+        assertTrue(input.getPromptPayload().getUserPrompt().contains("File 1: README.md"));
+        assertTrue(input.getPromptPayload().getOutputSchema().length() < 250);
+        assertTrue(compactContext.getOriginalPromptCharacters() > compactContext.getCompactPromptCharacters());
+        assertTrue(compactContext.getPromptCharactersSaved() > 0);
+        assertTrue(compactContext.getPromptCompactRatio() < 1);
+    }
+
+    /**
      * 空预算结果不能进入组装器。
      */
     @Test
     void shouldRejectNullBudgetResult() {
         assertThrows(IllegalArgumentException.class, () -> assembler.assemble(null));
+    }
+
+    private static LlmOptimizationProperties optimizationProperties(boolean compactPromptEnabled) {
+        return new LlmOptimizationProperties(
+                compactPromptEnabled ? "exp_3_compact_prompt" : "baseline",
+                0,
+                false,
+                800,
+                false,
+                "fast_model",
+                "qwen-turbo",
+                compactPromptEnabled
+        );
     }
 
     /**

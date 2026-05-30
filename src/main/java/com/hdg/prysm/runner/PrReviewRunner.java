@@ -14,6 +14,10 @@ import com.hdg.prysm.execution.ReviewExecutionInput;
 import com.hdg.prysm.execution.RuleEngineResult;
 import com.hdg.prysm.github.GithubPullRequestCommentClient;
 import com.hdg.prysm.llm.LlmReviewRunner;
+import com.hdg.prysm.optimization.LlmOptimizationContext;
+import com.hdg.prysm.optimization.LlmOptimizationDecision;
+import com.hdg.prysm.optimization.LlmOptimizationPlanner;
+import com.hdg.prysm.optimization.LlmOptimizationProperties;
 import com.hdg.prysm.review.PrReviewContext;
 import com.hdg.prysm.review.PrReviewContextLoader;
 import com.hdg.prysm.result.ReviewAggregationResult;
@@ -56,6 +60,9 @@ public class PrReviewRunner implements ApplicationRunner {
     private final ReviewResultAggregator reviewResultAggregator;
     private final ReviewCommentRenderer reviewCommentRenderer;
     private final GithubPullRequestCommentClient githubPullRequestCommentClient;
+    private final LlmOptimizationProperties optimizationProperties;
+    private final LlmOptimizationPlanner optimizationPlanner;
+    private final LlmOptimizationContext optimizationContext;
     private final TraceRecorder traceRecorder;
     private final TraceReporter traceReporter;
     private final Environment environment;
@@ -79,6 +86,9 @@ public class PrReviewRunner implements ApplicationRunner {
             ReviewResultAggregator reviewResultAggregator,
             ReviewCommentRenderer reviewCommentRenderer,
             GithubPullRequestCommentClient githubPullRequestCommentClient,
+            LlmOptimizationProperties optimizationProperties,
+            LlmOptimizationPlanner optimizationPlanner,
+            LlmOptimizationContext optimizationContext,
             TraceRecorder traceRecorder,
             TraceReporter traceReporter,
             Environment environment,
@@ -98,6 +108,9 @@ public class PrReviewRunner implements ApplicationRunner {
         this.reviewResultAggregator = reviewResultAggregator;
         this.reviewCommentRenderer = reviewCommentRenderer;
         this.githubPullRequestCommentClient = githubPullRequestCommentClient;
+        this.optimizationProperties = optimizationProperties;
+        this.optimizationPlanner = optimizationPlanner;
+        this.optimizationContext = optimizationContext;
         this.traceRecorder = traceRecorder;
         this.traceReporter = traceReporter;
         this.environment = environment;
@@ -264,6 +277,8 @@ public class PrReviewRunner implements ApplicationRunner {
                 ruleResult.getSummary()
         );
 
+        LlmOptimizationDecision optimizationDecision = optimizationPlanner.plan(enrichedInput);
+        optimizationContext.setCurrentDecision(optimizationDecision);
         LlmReviewResult llmResult = traceRecorder.record(
                 trace,
                 "llm_review",
@@ -276,6 +291,21 @@ public class PrReviewRunner implements ApplicationRunner {
         llmSpan
                 .put("llmFindings", llmResult.getFindings().size())
                 .put("modelName", llmModel)
+                .put("effectiveModel", optimizationDecision.getEffectiveModel())
+                .put("optimizationGroup", optimizationProperties.getGroup())
+                .put("rolloutPercent", optimizationProperties.getRolloutPercent())
+                .put("maxOutputTokensEnabled", optimizationProperties.isMaxOutputTokensEnabled())
+                .put("maxOutputTokens", optimizationProperties.getMaxOutputTokens())
+                .put("fastPathEnabled", optimizationProperties.isFastPathEnabled())
+                .put("fastPathMode", optimizationProperties.getFastPathMode())
+                .put("fastModel", optimizationProperties.getFastModel())
+                .put("fastPathMatched", optimizationDecision.isFastPathMatched())
+                .put("fastPathReason", optimizationDecision.getFastPathReason())
+                .put("compactPromptEnabled", optimizationProperties.isCompactPromptEnabled())
+                .put("originalPromptCharacters", optimizationContext.getOriginalPromptCharacters())
+                .put("compactPromptCharacters", optimizationContext.getCompactPromptCharacters())
+                .put("promptCharactersSaved", optimizationContext.getPromptCharactersSaved())
+                .put("promptCompactRatio", optimizationContext.getPromptCompactRatio())
                 .put("promptCharacters", llmPromptCharacters)
                 .put("estimatedPromptTokens", estimateTokens(llmPromptCharacters))
                 .put("tokenSource", "estimated")

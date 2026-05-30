@@ -43,3 +43,4 @@ with:
   llm-api-base-url: https://dashscope.aliyuncs.com/compatible-mode/v1
   llm-model: qwen-plus
 ```
+Workflow smoke test for PR review comment writeback.

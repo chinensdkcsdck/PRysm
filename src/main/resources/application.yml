@@ -24,5 +24,17 @@ prysm:
     api-base-url: ${LLM_API_BASE_URL:https://dashscope.aliyuncs.com/compatible-mode/v1}
     model: ${LLM_MODEL:qwen-plus}
     timeout-seconds: 60
+  optimization:
+    rollout-percent: ${PRYSM_OPT_ROLLOUT_PERCENT:0}
+    group: ${PRYSM_OPT_GROUP:baseline}
+    max-output-tokens:
+      enabled: ${PRYSM_OPT_MAX_OUTPUT_TOKENS_ENABLED:false}
+      value: ${PRYSM_LLM_MAX_OUTPUT_TOKENS:800}
+    fast-path:
+      enabled: ${PRYSM_OPT_FAST_PATH_ENABLED:false}
+      mode: ${PRYSM_OPT_FAST_PATH_MODE:fast_model}
+      fast-model: ${PRYSM_LLM_FAST_MODEL:qwen-turbo}
+    compact-prompt:
+      enabled: ${PRYSM_OPT_COMPACT_PROMPT_ENABLED:false}
   comment:
     enabled: true

@@ -10,7 +10,10 @@ import com.hdg.prysm.execution.ContextStatusCode;
 import com.hdg.prysm.execution.PromptPayload;
 import com.hdg.prysm.execution.ReviewExecutionInput;
 import com.hdg.prysm.execution.ReviewTargetFile;
+import com.hdg.prysm.optimization.LlmOptimizationContext;
+import com.hdg.prysm.optimization.LlmOptimizationProperties;
 import com.hdg.prysm.review.PrReviewFileContext;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
 import java.util.List;
@@ -54,6 +57,28 @@ public class ReviewExecutionInputAssembler {
             }
             """;
 
+    private static final String COMPACT_OUTPUT_SCHEMA = """
+            {"summary":"string","findings":[{"severity":"error|warning|info","filePath":"string","startLine":1,"endLine":1,"line":1,"title":"string","message":"string","suggestion":"string","ruleId":"LLM_RULE_ID"}]}
+            """;
+
+    private final LlmOptimizationProperties optimizationProperties;
+    private final LlmOptimizationContext optimizationContext;
+
+    @Autowired
+    public ReviewExecutionInputAssembler(
+            LlmOptimizationProperties optimizationProperties,
+            LlmOptimizationContext optimizationContext
+    ) {
+        if (optimizationProperties == null) {
+            throw new IllegalArgumentException("Optimization properties must not be null");
+        }
+        if (optimizationContext == null) {
+            throw new IllegalArgumentException("Optimization context must not be null");
+        }
+        this.optimizationProperties = optimizationProperties;
+        this.optimizationContext = optimizationContext;
+    }
+
     /**
      * 将 PR7 的预算结果组装成 B 线可直接消费的 ReviewExecutionInput。
      */
@@ -65,12 +90,21 @@ public class ReviewExecutionInputAssembler {
         PrDiff diff = budgetResult.getSelectionResult().getReviewContext().getDiff();
         PrContext prContext = diff.getContext();
         List<ReviewTargetFile> targetFiles = budgetResult.getTargetFiles();
+        String fullPrompt = userPrompt(budgetResult, diff, targetFiles);
+        String effectivePrompt = optimizationProperties.isCompactPromptEnabled()
+                ? compactUserPrompt(budgetResult, diff, targetFiles)
+                : fullPrompt;
+        optimizationContext.recordPromptCharacters(fullPrompt.length(), effectivePrompt.length());
         return new ReviewExecutionInput(
                 prContext,
                 diff,
                 targetFiles,
                 contextStatus(budgetResult),
-                new PromptPayload(SYSTEM_PROMPT, userPrompt(budgetResult, diff, targetFiles), OUTPUT_SCHEMA)
+                new PromptPayload(
+                        SYSTEM_PROMPT,
+                        effectivePrompt,
+                        optimizationProperties.isCompactPromptEnabled() ? COMPACT_OUTPUT_SCHEMA : OUTPUT_SCHEMA
+                )
         );
     }
 
@@ -101,6 +135,81 @@ public class ReviewExecutionInputAssembler {
         appendReviewFiles(prompt, budgetResult, targetFiles);
         appendSkippedFiles(prompt, budgetResult);
         return prompt.toString();
+    }
+
+    /**
+     * 组装压缩版 user prompt，用于灰度对比 prompt 规模对 LLM 耗时的影响。
+     */
+    private String compactUserPrompt(
+            ReviewContextBudgetResult budgetResult,
+            PrDiff diff,
+            List<ReviewTargetFile> targetFiles
+    ) {
+        StringBuilder prompt = new StringBuilder();
+        PrContext context = diff.getContext();
+        prompt.append("PR ")
+                .append(context.getOwner())
+                .append('/')
+                .append(context.getRepository())
+                .append('#')
+                .append(context.getPullRequestNumber())
+                .append(": files=")
+                .append(diff.getFileCount())
+                .append(", +")
+                .append(diff.getTotalAdditions())
+                .append(", -")
+                .append(diff.getTotalDeletions())
+                .append('\n');
+        prompt.append("Budget: used=")
+                .append(budgetResult.getUsedCharacters())
+                .append(", remaining=")
+                .append(budgetResult.getRemainingCharacters())
+                .append(", truncated=")
+                .append(budgetResult.isTruncated())
+                .append("\n\n");
+        prompt.append("Review files\n");
+        for (int index = 0; index < targetFiles.size(); index++) {
+            appendCompactReviewFile(prompt, targetFiles.get(index), index + 1);
+        }
+        if (!budgetResult.getSkippedFiles().isEmpty()) {
+            prompt.append("Skipped files: ")
+                    .append(budgetResult.getSkippedFiles().size())
+                    .append('\n');
+        }
+        return prompt.toString();
+    }
+
+    /**
+     * 写入压缩版单文件上下文，优先保留 patch，缺少 patch 时才保留 snippet。
+     */
+    private void appendCompactReviewFile(StringBuilder prompt, ReviewTargetFile targetFile, int fileIndex) {
+        PrChangedFile changedFile = targetFile.getChangedFile();
+        prompt.append("File ")
+                .append(fileIndex)
+                .append(": ")
+                .append(changedFile.getFilename())
+                .append(" status=")
+                .append(changedFile.getStatus())
+                .append(" +")
+                .append(changedFile.getAdditions())
+                .append(" -")
+                .append(changedFile.getDeletions())
+                .append(" priority=")
+                .append(targetFile.getPriority())
+                .append('\n');
+        if (changedFile.getPatch() != null && !changedFile.getPatch().isBlank()) {
+            prompt.append(fencedBlock("diff", changedFile.getPatch())).append('\n');
+            return;
+        }
+        if (!targetFile.getSnippets().isEmpty()) {
+            PrReviewFileContext.Snippet snippet = targetFile.getSnippets().get(0);
+            prompt.append("Snippet ")
+                    .append(snippet.getStartLine())
+                    .append('-')
+                    .append(snippet.getEndLine())
+                    .append('\n');
+            prompt.append(fencedBlock("text", snippet.getContent())).append('\n');
+        }
     }
 
     /**

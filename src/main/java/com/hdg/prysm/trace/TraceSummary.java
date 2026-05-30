@@ -20,6 +20,9 @@ public class TraceSummary {
     private final Integer estimatedPromptTokens;
     private final String tokenSource;
     private final Boolean commentWritten;
+    private final String optimizationGroup;
+    private final String modelName;
+    private final String effectiveModel;
 
     public TraceSummary(TraceContext context) {
         if (context == null) {
@@ -39,6 +42,9 @@ public class TraceSummary {
         this.estimatedPromptTokens = readLastInt(context, "llm_review", "estimatedPromptTokens");
         this.tokenSource = readLastString(context, "llm_review", "tokenSource");
         this.commentWritten = readLastBoolean(context, "github_comment", "commentWritten");
+        this.optimizationGroup = readLastString(context, "llm_review", "optimizationGroup");
+        this.modelName = readLastString(context, "llm_review", "modelName");
+        this.effectiveModel = readLastString(context, "llm_review", "effectiveModel");
     }
 
     public String getTraceId() {
@@ -91,6 +97,18 @@ public class TraceSummary {
 
     public Boolean getCommentWritten() {
         return commentWritten;
+    }
+
+    public String getOptimizationGroup() {
+        return optimizationGroup;
+    }
+
+    public String getModelName() {
+        return modelName;
+    }
+
+    public String getEffectiveModel() {
+        return effectiveModel;
     }
 
     private static TraceStatus summaryStatus(List<TraceSpan> spans) {

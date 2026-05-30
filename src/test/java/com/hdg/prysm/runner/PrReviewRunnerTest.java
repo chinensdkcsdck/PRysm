@@ -19,6 +19,9 @@ import com.hdg.prysm.execution.ReviewExecutionInput;
 import com.hdg.prysm.execution.RuleEngineResult;
 import com.hdg.prysm.github.GithubPullRequestCommentClient;
 import com.hdg.prysm.llm.LlmReviewRunner;
+import com.hdg.prysm.optimization.LlmOptimizationContext;
+import com.hdg.prysm.optimization.LlmOptimizationPlanner;
+import com.hdg.prysm.optimization.LlmOptimizationProperties;
 import com.hdg.prysm.review.PrReviewContext;
 import com.hdg.prysm.review.PrReviewContextLoader;
 import com.hdg.prysm.result.ReviewAggregationResult;
@@ -77,6 +80,9 @@ class PrReviewRunnerTest {
                 aggregator,
                 commentRenderer,
                 commentClient,
+                baselineOptimizationProperties(),
+                baselineOptimizationPlanner(),
+                new LlmOptimizationContext(),
                 traceRecorder,
                 traceReporter,
                 environment,
@@ -137,6 +143,9 @@ class PrReviewRunnerTest {
                 aggregator,
                 commentRenderer,
                 commentClient,
+                baselineOptimizationProperties(),
+                baselineOptimizationPlanner(),
+                new LlmOptimizationContext(),
                 traceRecorder,
                 traceReporter,
                 environment,
@@ -240,6 +249,9 @@ class PrReviewRunnerTest {
                 aggregator,
                 commentRenderer,
                 commentClient,
+                baselineOptimizationProperties(),
+                baselineOptimizationPlanner(),
+                new LlmOptimizationContext(),
                 traceRecorder,
                 traceReporter,
                 environment,
@@ -339,6 +351,9 @@ class PrReviewRunnerTest {
                 aggregator,
                 commentRenderer,
                 commentClient,
+                baselineOptimizationProperties(),
+                baselineOptimizationPlanner(),
+                new LlmOptimizationContext(),
                 traceRecorder,
                 traceReporter,
                 environment,
@@ -393,6 +408,9 @@ class PrReviewRunnerTest {
                 aggregator,
                 commentRenderer,
                 commentClient,
+                baselineOptimizationProperties(),
+                baselineOptimizationPlanner(),
+                new LlmOptimizationContext(),
                 traceRecorder,
                 traceReporter,
                 environment,
@@ -407,5 +425,22 @@ class PrReviewRunnerTest {
         );
 
         verify(traceReporter, times(1)).report(org.mockito.ArgumentMatchers.any(TraceContext.class));
+    }
+
+    private static LlmOptimizationProperties baselineOptimizationProperties() {
+        return new LlmOptimizationProperties(
+                "baseline",
+                0,
+                false,
+                800,
+                false,
+                "fast_model",
+                "qwen-turbo",
+                false
+        );
+    }
+
+    private static LlmOptimizationPlanner baselineOptimizationPlanner() {
+        return new LlmOptimizationPlanner(baselineOptimizationProperties(), "test-model");
     }
 }

@@ -16,6 +16,9 @@ class TraceSummaryTest {
         llm.put("promptCharacters", 100);
         llm.put("estimatedPromptTokens", 25);
         llm.put("tokenSource", "estimated");
+        llm.put("optimizationGroup", "baseline");
+        llm.put("modelName", "qwen-plus");
+        llm.put("effectiveModel", "qwen-plus");
         llm.finish(TraceStatus.SUCCESS, Instant.now());
         context.addSpan(llm);
         TraceSpan aggregate = new TraceSpan("result_aggregate", Instant.now());
@@ -41,6 +44,9 @@ class TraceSummaryTest {
         assertEquals(25, summary.getEstimatedPromptTokens());
         assertEquals("estimated", summary.getTokenSource());
         assertEquals(true, summary.getCommentWritten());
+        assertEquals("baseline", summary.getOptimizationGroup());
+        assertEquals("qwen-plus", summary.getModelName());
+        assertEquals("qwen-plus", summary.getEffectiveModel());
     }
 
     @Test
