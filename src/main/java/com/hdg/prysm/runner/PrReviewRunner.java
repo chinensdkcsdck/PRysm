@@ -7,9 +7,17 @@ import com.hdg.prysm.context.PrContext;
 import com.hdg.prysm.context.PrContextResolver;
 import com.hdg.prysm.diff.PrDiff;
 import com.hdg.prysm.diff.PrDiffProvider;
+import com.hdg.prysm.comment.ReviewCommentRenderer;
+import com.hdg.prysm.execution.LlmReviewResult;
 import com.hdg.prysm.execution.ReviewExecutionInput;
+import com.hdg.prysm.execution.RuleEngineResult;
+import com.hdg.prysm.github.GithubPullRequestCommentClient;
+import com.hdg.prysm.llm.LlmReviewRunner;
 import com.hdg.prysm.review.PrReviewContext;
 import com.hdg.prysm.review.PrReviewContextLoader;
+import com.hdg.prysm.result.ReviewAggregationResult;
+import com.hdg.prysm.result.ReviewResultAggregator;
+import com.hdg.prysm.rule.RuleEngineRunner;
 import com.hdg.prysm.selection.ReviewFileSelectionResult;
 import com.hdg.prysm.selection.ReviewFileSelectionService;
 import org.slf4j.Logger;
@@ -36,8 +44,14 @@ public class PrReviewRunner implements ApplicationRunner {
     private final ReviewFileSelectionService reviewFileSelectionService;
     private final ReviewContextBudgetService reviewContextBudgetService;
     private final ReviewExecutionInputAssembler reviewExecutionInputAssembler;
+    private final RuleEngineRunner ruleEngineRunner;
+    private final LlmReviewRunner llmReviewRunner;
+    private final ReviewResultAggregator reviewResultAggregator;
+    private final ReviewCommentRenderer reviewCommentRenderer;
+    private final GithubPullRequestCommentClient githubPullRequestCommentClient;
     private final Environment environment;
     private final boolean runnerEnabled;
+    private final boolean commentEnabled;
 
     /**
      * 注入 PR 上下文解析器、运行环境和 Runner 开关。
@@ -49,8 +63,14 @@ public class PrReviewRunner implements ApplicationRunner {
             ReviewFileSelectionService reviewFileSelectionService,
             ReviewContextBudgetService reviewContextBudgetService,
             ReviewExecutionInputAssembler reviewExecutionInputAssembler,
+            RuleEngineRunner ruleEngineRunner,
+            LlmReviewRunner llmReviewRunner,
+            ReviewResultAggregator reviewResultAggregator,
+            ReviewCommentRenderer reviewCommentRenderer,
+            GithubPullRequestCommentClient githubPullRequestCommentClient,
             Environment environment,
-            @Value("${prysm.runner.enabled:true}") boolean runnerEnabled
+            @Value("${prysm.runner.enabled:true}") boolean runnerEnabled,
+            @Value("${prysm.comment.enabled:true}") boolean commentEnabled
     ) {
         this.prContextResolver = prContextResolver;
         this.prDiffProvider = prDiffProvider;
@@ -58,8 +78,14 @@ public class PrReviewRunner implements ApplicationRunner {
         this.reviewFileSelectionService = reviewFileSelectionService;
         this.reviewContextBudgetService = reviewContextBudgetService;
         this.reviewExecutionInputAssembler = reviewExecutionInputAssembler;
+        this.ruleEngineRunner = ruleEngineRunner;
+        this.llmReviewRunner = llmReviewRunner;
+        this.reviewResultAggregator = reviewResultAggregator;
+        this.reviewCommentRenderer = reviewCommentRenderer;
+        this.githubPullRequestCommentClient = githubPullRequestCommentClient;
         this.environment = environment;
         this.runnerEnabled = runnerEnabled;
+        this.commentEnabled = commentEnabled;
     }
 
     /**
@@ -123,5 +149,39 @@ public class PrReviewRunner implements ApplicationRunner {
                 executionInput.getContextStatus().getCode(),
                 executionInput.getPromptPayload().getUserPrompt().length()
         );
+
+        RuleEngineResult ruleResult = ruleEngineRunner.run(executionInput);
+        log.info(
+                "Rule engine completed: findings={}, summary={}",
+                ruleResult.getFindings().size(),
+                ruleResult.getSummary()
+        );
+
+        LlmReviewResult llmResult = llmReviewRunner.run(executionInput);
+        log.info(
+                "LLM review completed: findings={}, summary={}",
+                llmResult.getFindings().size(),
+                llmResult.getSummary()
+        );
+
+        ReviewAggregationResult aggregationResult = reviewResultAggregator.aggregate(
+                executionInput,
+                ruleResult,
+                llmResult
+        );
+        log.info(
+                "Aggregated review findings: findings={}, duplicatesRemoved={}",
+                aggregationResult.getFindings().size(),
+                aggregationResult.getDuplicateCount()
+        );
+
+        String commentBody = reviewCommentRenderer.render(aggregationResult);
+        if (!commentEnabled) {
+            log.info("Pull request comment writing is disabled.");
+            return;
+        }
+
+        githubPullRequestCommentClient.createComment(executionInput.getPrContext(), commentBody);
+        log.info("Wrote aggregated review comment to pull request.");
     }
 }

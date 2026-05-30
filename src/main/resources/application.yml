@@ -16,3 +16,5 @@ prysm:
     api-base-url: ${LLM_API_BASE_URL:https://dashscope.aliyuncs.com/compatible-mode/v1}
     model: ${LLM_MODEL:qwen-plus}
     timeout-seconds: 60
+  comment:
+    enabled: true
