@@ -50,6 +50,23 @@ class LlmOptimizationPlannerTest {
     }
 
     @Test
+    void shouldUseFastModelForSmallThreeFileDocumentationPullRequest() {
+        LlmOptimizationPlanner planner = new LlmOptimizationPlanner(
+                properties(true),
+                "qwen-plus"
+        );
+
+        LlmOptimizationDecision decision = planner.plan(input(
+                file("README.md", 4, 2),
+                file(".github/workflows/prysm-review.yml", 4, 2),
+                file("docs/usage.md", 2, 2)
+        ));
+
+        assertTrue(decision.isFastPathMatched());
+        assertEquals("qwen-turbo", decision.getEffectiveModel());
+    }
+
+    @Test
     void shouldKeepDefaultModelForCodePullRequest() {
         LlmOptimizationPlanner planner = new LlmOptimizationPlanner(
                 properties(true),
@@ -69,7 +86,27 @@ class LlmOptimizationPlannerTest {
                 "qwen-plus"
         );
 
-        LlmOptimizationDecision decision = planner.plan(input(file("docs/guide.md", 31, 0)));
+        LlmOptimizationDecision decision = planner.plan(input(file("docs/guide.md", 81, 0)));
+
+        assertFalse(decision.isFastPathMatched());
+        assertEquals("qwen-plus", decision.getEffectiveModel());
+    }
+
+    @Test
+    void shouldKeepDefaultModelWhenDocumentationPullRequestTouchesTooManyFiles() {
+        LlmOptimizationPlanner planner = new LlmOptimizationPlanner(
+                properties(true),
+                "qwen-plus"
+        );
+
+        LlmOptimizationDecision decision = planner.plan(input(
+                file("docs/one.md", 1, 0),
+                file("docs/two.md", 1, 0),
+                file("docs/three.md", 1, 0),
+                file("docs/four.md", 1, 0),
+                file("docs/five.md", 1, 0),
+                file("docs/six.md", 1, 0)
+        ));
 
         assertFalse(decision.isFastPathMatched());
         assertEquals("qwen-plus", decision.getEffectiveModel());

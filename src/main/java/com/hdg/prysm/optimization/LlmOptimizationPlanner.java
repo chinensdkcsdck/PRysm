@@ -13,8 +13,8 @@ import java.util.Locale;
 @Component
 public class LlmOptimizationPlanner {
 
-    private static final int SMALL_PR_MAX_FILES = 2;
-    private static final int SMALL_PR_MAX_CHANGED_LINES = 30;
+    private static final int SMALL_PR_MAX_FILES = 5;
+    private static final int SMALL_PR_MAX_CHANGED_LINES = 80;
     private static final String FAST_MODEL_MODE = "fast_model";
     private static final String FAST_PATH_REASON = "small_doc_or_workflow_pr";
 
