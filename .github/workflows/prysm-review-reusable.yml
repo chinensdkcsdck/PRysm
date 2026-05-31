@@ -62,11 +62,10 @@ jobs:
           distribution: temurin
           java-version: 21
 
-      - name: Resolve Prysm jar
+      - name: Download Prysm jar
+        id: download-prysm-jar
         env:
           GH_TOKEN: ${{ github.token }}
-          PRYSM_REPOSITORY: ${{ inputs.prysm-repository }}
-          PRYSM_REF: ${{ inputs.prysm-ref }}
           PRYSM_RELEASE_REPOSITORY: ${{ inputs.prysm-release-repository }}
           PRYSM_RELEASE_TAG: ${{ inputs.prysm-release-tag }}
         run: |
@@ -77,16 +76,41 @@ jobs:
             release_args+=("$PRYSM_RELEASE_TAG")
           fi
           if gh release download "${release_args[@]}" --repo "$PRYSM_RELEASE_REPOSITORY" --pattern "prysm.jar" --dir prysm-dist; then
+            echo "downloaded=true" >> "$GITHUB_OUTPUT"
             echo "Downloaded prebuilt Prysm jar."
           else
-            echo "Prebuilt Prysm jar unavailable; building from source."
-            git clone --depth 1 "https://github.com/$PRYSM_REPOSITORY.git" prysm
-            cd prysm
-            git fetch --depth 1 origin "$PRYSM_REF"
-            git checkout --detach FETCH_HEAD
-            bash ./mvnw -q -DskipTests package
-            cp target/*.jar ../prysm-dist/prysm.jar
+            echo "downloaded=false" >> "$GITHUB_OUTPUT"
+            echo "Prebuilt Prysm jar unavailable; falling back to Maven build."
           fi
+
+      - name: Checkout Prysm source
+        if: steps.download-prysm-jar.outputs.downloaded != 'true'
+        env:
+          PRYSM_REPOSITORY: ${{ inputs.prysm-repository }}
+          PRYSM_REF: ${{ inputs.prysm-ref }}
+        run: |
+          set -euo pipefail
+          git clone --depth 1 "https://github.com/$PRYSM_REPOSITORY.git" prysm
+          cd prysm
+          git fetch --depth 1 origin "$PRYSM_REF"
+          git checkout --detach FETCH_HEAD
+
+      - name: Set up Maven cache
+        if: steps.download-prysm-jar.outputs.downloaded != 'true'
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+          cache: maven
+          cache-dependency-path: prysm/pom.xml
+
+      - name: Build Prysm jar
+        if: steps.download-prysm-jar.outputs.downloaded != 'true'
+        run: |
+          set -euo pipefail
+          cd prysm
+          bash ./mvnw -q -DskipTests package
+          cp target/*.jar ../prysm-dist/prysm.jar
 
       - name: Run fast Prysm review
         env:
