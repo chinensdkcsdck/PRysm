@@ -1,0 +1,16 @@
+name: Prysm PR Review
+
+on:
+  pull_request_target:
+    types: [opened, synchronize, reopened]
+
+permissions:
+  contents: read
+  pull-requests: write
+  issues: write
+
+jobs:
+  review:
+    uses: Remohdg/PRysm-hdg/.github/workflows/prysm-review-reusable.yml@main
+    secrets:
+      LLM_API_KEY: ${{ secrets.LLM_API_KEY }}

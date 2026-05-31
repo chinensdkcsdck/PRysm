@@ -1,7 +1,7 @@
 name: Prysm PR Review
 
 on:
-  pull_request:
+  pull_request_target:
     types: [opened, synchronize, reopened]
 
 concurrency:
@@ -37,7 +37,19 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
+          repository: ${{ github.event.pull_request.head.repo.full_name }}
+          ref: ${{ github.event.pull_request.head.sha }}
           fetch-depth: 1
+          persist-credentials: false
+          path: target-repo
+
+      - name: Checkout trusted Prysm source
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ github.repository }}
+          ref: ${{ github.sha }}
+          fetch-depth: 1
+          path: prysm-source
 
       - name: Set up Java 21
         uses: actions/setup-java@v4
@@ -45,7 +57,7 @@ jobs:
           distribution: temurin
           java-version: 21
           cache: maven
-          cache-dependency-path: pom.xml
+          cache-dependency-path: prysm-source/pom.xml
 
       - name: Resolve Prysm jar
         env:
@@ -61,8 +73,9 @@ jobs:
             echo "Downloaded prebuilt Prysm jar."
           else
             echo "Prebuilt Prysm jar unavailable; building from source."
+            cd prysm-source
             bash ./mvnw -q -DskipTests package
-            cp target/*.jar prysm-dist/prysm.jar
+            cp target/*.jar ../prysm-dist/prysm.jar
           fi
 
       - name: Run fast Prysm review
@@ -70,6 +83,7 @@ jobs:
           GITHUB_TOKEN: ${{ github.token }}
           LLM_API_KEY: ${{ secrets.LLM_API_KEY }}
           PRYSM_REVIEW_MODE: fast
+          PRYSM_WORKSPACE_ROOT: ${{ github.workspace }}/target-repo
         run: java -jar prysm-dist/prysm.jar
 
       - name: Upload Prysm jar
@@ -89,7 +103,11 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
+          repository: ${{ github.event.pull_request.head.repo.full_name }}
+          ref: ${{ github.event.pull_request.head.sha }}
           fetch-depth: 1
+          persist-credentials: false
+          path: target-repo
 
       - name: Set up Java 21
         uses: actions/setup-java@v4
@@ -108,4 +126,5 @@ jobs:
           GITHUB_TOKEN: ${{ github.token }}
           LLM_API_KEY: ${{ secrets.LLM_API_KEY }}
           PRYSM_REVIEW_MODE: deep
+          PRYSM_WORKSPACE_ROOT: ${{ github.workspace }}/target-repo
         run: java -jar prysm-dist/prysm.jar

@@ -43,14 +43,17 @@ jobs:
 
     permissions:
       contents: read
-      pull-requests: read
+      pull-requests: write
       issues: write
 
     steps:
       - name: Checkout target repository
         uses: actions/checkout@v4
         with:
+          repository: ${{ github.event.pull_request.head.repo.full_name || github.repository }}
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
           fetch-depth: 1
+          persist-credentials: false
           path: target-repo
 
       - name: Set up Java 21
@@ -110,14 +113,17 @@ jobs:
 
     permissions:
       contents: read
-      pull-requests: read
+      pull-requests: write
       issues: write
 
     steps:
       - name: Checkout target repository
         uses: actions/checkout@v4
         with:
+          repository: ${{ github.event.pull_request.head.repo.full_name || github.repository }}
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
           fetch-depth: 1
+          persist-credentials: false
           path: target-repo
 
       - name: Set up Java 21
