@@ -22,7 +22,7 @@ public class ReviewCommentRenderer {
         return render(
                 result,
                 "## PRysm Fast Review Result",
-                "Fast review is complete. A deeper review is still running and this comment will be updated."
+                "快速初筛完成。深度审查仍在进行，稍后会更新本评论；以下结果可能被深度审查修正。"
         );
     }
 

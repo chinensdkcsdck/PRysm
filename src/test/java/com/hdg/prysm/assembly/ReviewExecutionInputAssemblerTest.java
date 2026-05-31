@@ -166,7 +166,9 @@ class ReviewExecutionInputAssemblerTest {
         assertTrue(input.getPromptPayload().getUserPrompt().contains("PR owner/repo#8"));
         assertTrue(input.getPromptPayload().getUserPrompt().contains("Budget: used="));
         assertTrue(input.getPromptPayload().getUserPrompt().contains("File 1: README.md"));
-        assertTrue(input.getPromptPayload().getOutputSchema().length() < 250);
+        assertTrue(input.getPromptPayload().getOutputSchema().length() < 400);
+        assertTrue(input.getPromptPayload().getOutputSchema().contains("\"confidence\""));
+        assertTrue(input.getPromptPayload().getOutputSchema().contains("\"category\""));
         assertTrue(compactContext.getOriginalPromptCharacters() > compactContext.getCompactPromptCharacters());
         assertTrue(compactContext.getPromptCharactersSaved() > 0);
         assertTrue(compactContext.getPromptCompactRatio() < 1);

@@ -18,6 +18,7 @@ import com.hdg.prysm.optimization.LlmOptimizationContext;
 import com.hdg.prysm.optimization.LlmOptimizationDecision;
 import com.hdg.prysm.optimization.LlmOptimizationPlanner;
 import com.hdg.prysm.optimization.LlmOptimizationProperties;
+import com.hdg.prysm.quality.ReviewFindingQualityGate;
 import com.hdg.prysm.review.PrReviewContext;
 import com.hdg.prysm.review.PrReviewContextLoader;
 import com.hdg.prysm.result.ReviewAggregationResult;
@@ -62,6 +63,7 @@ public class PrReviewRunner implements ApplicationRunner {
     private final ReviewResultAggregator reviewResultAggregator;
     private final ReviewCommentRenderer reviewCommentRenderer;
     private final GithubPullRequestCommentClient githubPullRequestCommentClient;
+    private final ReviewFindingQualityGate reviewFindingQualityGate;
     private final LlmOptimizationProperties optimizationProperties;
     private final LlmOptimizationPlanner optimizationPlanner;
     private final LlmOptimizationContext optimizationContext;
@@ -89,6 +91,7 @@ public class PrReviewRunner implements ApplicationRunner {
             ReviewResultAggregator reviewResultAggregator,
             ReviewCommentRenderer reviewCommentRenderer,
             GithubPullRequestCommentClient githubPullRequestCommentClient,
+            ReviewFindingQualityGate reviewFindingQualityGate,
             LlmOptimizationProperties optimizationProperties,
             LlmOptimizationPlanner optimizationPlanner,
             LlmOptimizationContext optimizationContext,
@@ -112,6 +115,7 @@ public class PrReviewRunner implements ApplicationRunner {
         this.reviewResultAggregator = reviewResultAggregator;
         this.reviewCommentRenderer = reviewCommentRenderer;
         this.githubPullRequestCommentClient = githubPullRequestCommentClient;
+        this.reviewFindingQualityGate = reviewFindingQualityGate;
         this.optimizationProperties = optimizationProperties;
         this.optimizationPlanner = optimizationPlanner;
         this.optimizationContext = optimizationContext;
@@ -288,10 +292,10 @@ public class PrReviewRunner implements ApplicationRunner {
 
         LlmOptimizationDecision optimizationDecision = LlmOptimizationDecision.baseline(llmModel);
         optimizationContext.setCurrentDecision(optimizationDecision);
-        LlmReviewResult llmResult;
+        LlmReviewResult rawLlmResult;
         optimizationContext.forceEffectiveModel(llmModel);
         try {
-            llmResult = traceRecorder.record(
+            rawLlmResult = traceRecorder.record(
                     trace,
                     "llm_review_deep",
                     () -> llmReviewRunner.run(enrichedInput),
@@ -301,10 +305,14 @@ public class PrReviewRunner implements ApplicationRunner {
         } finally {
             optimizationContext.clearForcedEffectiveModel();
         }
+        int rawDeepFindings = rawLlmResult.getFindings().size();
+        LlmReviewResult llmResult = reviewFindingQualityGate.filterDeepReview(enrichedInput, rawLlmResult);
         TraceSpan llmSpan = trace.getSpans().getLast();
         int llmPromptCharacters = enrichedInput.getPromptPayload().getUserPrompt().length();
         llmSpan
                 .put("llmFindings", llmResult.getFindings().size())
+                .put("rawLlmFindings", rawDeepFindings)
+                .put("filteredLlmFindings", rawDeepFindings - llmResult.getFindings().size())
                 .put("modelName", llmModel)
                 .put("effectiveModel", optimizationDecision.getEffectiveModel())
                 .put("optimizationGroup", optimizationProperties.getGroup())
@@ -395,10 +403,10 @@ public class PrReviewRunner implements ApplicationRunner {
             ReviewExecutionInput enrichedInput,
             RuleEngineResult ruleResult
     ) {
-        LlmReviewResult fastLlmResult;
+        LlmReviewResult rawFastLlmResult;
         optimizationContext.forceEffectiveModel(fastModel);
         try {
-            fastLlmResult = traceRecorder.record(
+            rawFastLlmResult = traceRecorder.record(
                     trace,
                     "llm_review_fast",
                     () -> llmReviewRunner.run(enrichedInput),
@@ -408,10 +416,14 @@ public class PrReviewRunner implements ApplicationRunner {
         } finally {
             optimizationContext.clearForcedEffectiveModel();
         }
+        int rawFastFindings = rawFastLlmResult.getFindings().size();
+        LlmReviewResult fastLlmResult = reviewFindingQualityGate.filterFastReview(enrichedInput, rawFastLlmResult);
         TraceSpan fastLlmSpan = trace.getSpans().getLast();
         int promptCharacters = enrichedInput.getPromptPayload().getUserPrompt().length();
         fastLlmSpan
                 .put("llmFindings", fastLlmResult.getFindings().size())
+                .put("rawLlmFindings", rawFastFindings)
+                .put("filteredLlmFindings", rawFastFindings - fastLlmResult.getFindings().size())
                 .put("modelName", llmModel)
                 .put("effectiveModel", fastModel)
                 .put("optimizationGroup", "fast_comment")

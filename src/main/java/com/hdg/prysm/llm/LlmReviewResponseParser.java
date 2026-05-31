@@ -91,7 +91,9 @@ public class LlmReviewResponseParser {
                 readRequiredText(node, "title"),
                 readRequiredText(node, "message"),
                 readNullableText(node, "suggestion"),
-                defaultRuleId(readNullableText(node, "ruleId"))
+                defaultRuleId(readNullableText(node, "ruleId")),
+                readNullableText(node, "confidence"),
+                readNullableText(node, "category")
         );
     }
 
