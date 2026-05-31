@@ -1,6 +1,7 @@
 package com.hdg.prysm.enrichment;
 
 import com.hdg.prysm.context.PrContext;
+import com.hdg.prysm.github.GithubApiSupport;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.env.Environment;
@@ -10,11 +11,9 @@ import tools.jackson.databind.ObjectMapper;
 
 import java.io.IOException;
 import java.net.URI;
-import java.net.URLEncoder;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
-import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
@@ -81,9 +80,6 @@ public class GithubPullRequestMetadataProvider implements PullRequestMetadataPro
         if (httpClient == null) {
             throw new IllegalArgumentException("HTTP client must not be null");
         }
-        if (apiBaseUrl == null || apiBaseUrl.isBlank()) {
-            throw new IllegalArgumentException("GitHub API base URL must not be blank");
-        }
         if (maxBodyCharacters <= 0) {
             throw new IllegalArgumentException("Maximum body characters must be positive");
         }
@@ -97,7 +93,7 @@ public class GithubPullRequestMetadataProvider implements PullRequestMetadataPro
         this.environment = environment;
         this.objectMapper = objectMapper;
         this.httpClient = httpClient;
-        this.apiBaseUrl = trimTrailingSlash(apiBaseUrl);
+        this.apiBaseUrl = GithubApiSupport.trimTrailingSlash(apiBaseUrl);
         this.maxBodyCharacters = maxBodyCharacters;
         this.maxCommits = maxCommits;
         this.maxCommitMessageCharacters = maxCommitMessageCharacters;
@@ -112,7 +108,7 @@ public class GithubPullRequestMetadataProvider implements PullRequestMetadataPro
             throw new IllegalArgumentException("Pull request context must not be null");
         }
 
-        String token = requireGithubToken();
+        String token = GithubApiSupport.requireToken(environment, "fetch pull request metadata");
         JsonNode pullRequestNode = fetchJson(pullRequestUri(context), token);
         String title = readNullableText(pullRequestNode, "title");
         String body = limitText(readNullableText(pullRequestNode, "body"), maxBodyCharacters);
@@ -149,19 +145,13 @@ public class GithubPullRequestMetadataProvider implements PullRequestMetadataPro
      * 请求 GitHub API 并解析 JSON。
      */
     private JsonNode fetchJson(URI uri, String token) {
-        HttpRequest request = HttpRequest.newBuilder(uri)
-                .timeout(Duration.ofSeconds(30))
-                .header("Accept", "application/vnd.github+json")
-                .header("Authorization", "Bearer " + token)
-                .header("X-GitHub-Api-Version", "2022-11-28")
+        HttpRequest request = GithubApiSupport.requestBuilder(uri, token)
                 .GET()
                 .build();
 
         try {
             HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
-            if (response.statusCode() < 200 || response.statusCode() >= 300) {
-                throw new IllegalStateException("GitHub metadata request failed with status " + response.statusCode());
-            }
+            GithubApiSupport.requireSuccess(response, "GitHub metadata request");
             return objectMapper.readTree(response.body());
         } catch (IOException exception) {
             throw new IllegalStateException("Failed to read GitHub metadata response", exception);
@@ -177,9 +167,9 @@ public class GithubPullRequestMetadataProvider implements PullRequestMetadataPro
     private URI pullRequestUri(PrContext context) {
         return URI.create(apiBaseUrl
                 + "/repos/"
-                + encodePathSegment(context.getOwner())
+                + GithubApiSupport.encodePathSegment(context.getOwner())
                 + "/"
-                + encodePathSegment(context.getRepository())
+                + GithubApiSupport.encodePathSegment(context.getRepository())
                 + "/pulls/"
                 + context.getPullRequestNumber());
     }
@@ -189,17 +179,6 @@ public class GithubPullRequestMetadataProvider implements PullRequestMetadataPro
      */
     private URI commitsUri(PrContext context) {
         return URI.create(pullRequestUri(context) + "/commits?per_page=" + Math.max(1, maxCommits));
-    }
-
-    /**
-     * 读取 GitHub API Token，缺失时直接失败。
-     */
-    private String requireGithubToken() {
-        String token = environment.getProperty("GITHUB_TOKEN");
-        if (token == null || token.isBlank()) {
-            throw new IllegalStateException("GITHUB_TOKEN must be configured to fetch pull request metadata");
-        }
-        return token;
     }
 
     /**
@@ -240,21 +219,4 @@ public class GithubPullRequestMetadataProvider implements PullRequestMetadataPro
         return originalBody != null && limitedBody != null && originalBody.length() > limitedBody.length();
     }
 
-    /**
-     * 去掉配置中的结尾斜杠。
-     */
-    private static String trimTrailingSlash(String value) {
-        String trimmed = value.trim();
-        if (trimmed.endsWith("/")) {
-            return trimmed.substring(0, trimmed.length() - 1);
-        }
-        return trimmed;
-    }
-
-    /**
-     * 编码 URL path segment。
-     */
-    private static String encodePathSegment(String value) {
-        return URLEncoder.encode(value, StandardCharsets.UTF_8).replace("+", "%20");
-    }
 }

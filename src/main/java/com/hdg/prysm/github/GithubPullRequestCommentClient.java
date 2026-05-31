@@ -11,11 +11,9 @@ import tools.jackson.databind.node.ObjectNode;
 
 import java.io.IOException;
 import java.net.URI;
-import java.net.URLEncoder;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
-import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.OptionalLong;
 
@@ -61,14 +59,10 @@ public class GithubPullRequestCommentClient {
         if (httpClient == null) {
             throw new IllegalArgumentException("HTTP client must not be null");
         }
-        if (apiBaseUrl == null || apiBaseUrl.isBlank()) {
-            throw new IllegalArgumentException("GitHub API base URL must not be blank");
-        }
-
         this.environment = environment;
         this.objectMapper = objectMapper;
         this.httpClient = httpClient;
-        this.apiBaseUrl = trimTrailingSlash(apiBaseUrl);
+        this.apiBaseUrl = GithubApiSupport.trimTrailingSlash(apiBaseUrl);
     }
 
     public long createComment(PrContext context, String body) {
@@ -79,21 +73,15 @@ public class GithubPullRequestCommentClient {
             throw new IllegalArgumentException("Pull request comment body must not be blank");
         }
 
-        String token = requireGithubToken();
-        HttpRequest request = HttpRequest.newBuilder(commentUri(context))
-                .timeout(Duration.ofSeconds(30))
-                .header("Accept", "application/vnd.github+json")
-                .header("Authorization", "Bearer " + token)
-                .header("X-GitHub-Api-Version", "2022-11-28")
+        String token = GithubApiSupport.requireToken(environment, "write pull request comments");
+        HttpRequest request = GithubApiSupport.requestBuilder(commentUri(context), token)
                 .header("Content-Type", "application/json")
                 .POST(HttpRequest.BodyPublishers.ofString(commentBody(body)))
                 .build();
 
         try {
             HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
-            if (response.statusCode() < 200 || response.statusCode() >= 300) {
-                throw new IllegalStateException("GitHub pull request comment failed with status " + response.statusCode());
-            }
+            GithubApiSupport.requireSuccess(response, "GitHub pull request comment");
             return readCommentId(response.body());
         } catch (IOException exception) {
             throw new IllegalStateException("Failed to write GitHub pull request comment", exception);
@@ -114,21 +102,15 @@ public class GithubPullRequestCommentClient {
             throw new IllegalArgumentException("Pull request comment body must not be blank");
         }
 
-        String token = requireGithubToken();
-        HttpRequest request = HttpRequest.newBuilder(commentUpdateUri(context, commentId))
-                .timeout(Duration.ofSeconds(30))
-                .header("Accept", "application/vnd.github+json")
-                .header("Authorization", "Bearer " + token)
-                .header("X-GitHub-Api-Version", "2022-11-28")
+        String token = GithubApiSupport.requireToken(environment, "write pull request comments");
+        HttpRequest request = GithubApiSupport.requestBuilder(commentUpdateUri(context, commentId), token)
                 .header("Content-Type", "application/json")
                 .method("PATCH", HttpRequest.BodyPublishers.ofString(commentBody(body)))
                 .build();
 
         try {
             HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
-            if (response.statusCode() < 200 || response.statusCode() >= 300) {
-                throw new IllegalStateException("GitHub pull request comment update failed with status " + response.statusCode());
-            }
+            GithubApiSupport.requireSuccess(response, "GitHub pull request comment update");
         } catch (IOException exception) {
             throw new IllegalStateException("Failed to update GitHub pull request comment", exception);
         } catch (InterruptedException exception) {
@@ -142,20 +124,14 @@ public class GithubPullRequestCommentClient {
             throw new IllegalArgumentException("Pull request context must not be null");
         }
 
-        String token = requireGithubToken();
-        HttpRequest request = HttpRequest.newBuilder(commentUri(context))
-                .timeout(Duration.ofSeconds(30))
-                .header("Accept", "application/vnd.github+json")
-                .header("Authorization", "Bearer " + token)
-                .header("X-GitHub-Api-Version", "2022-11-28")
+        String token = GithubApiSupport.requireToken(environment, "lookup pull request comments");
+        HttpRequest request = GithubApiSupport.requestBuilder(commentUri(context), token)
                 .GET()
                 .build();
 
         try {
             HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
-            if (response.statusCode() < 200 || response.statusCode() >= 300) {
-                throw new IllegalStateException("GitHub pull request comments lookup failed with status " + response.statusCode());
-            }
+            GithubApiSupport.requireSuccess(response, "GitHub pull request comments lookup");
             return readExistingReviewCommentId(response.body());
         } catch (IOException exception) {
             throw new IllegalStateException("Failed to lookup GitHub pull request comments", exception);
@@ -168,9 +144,9 @@ public class GithubPullRequestCommentClient {
     private URI commentUri(PrContext context) {
         return URI.create(apiBaseUrl
                 + "/repos/"
-                + encodePathSegment(context.getOwner())
+                + GithubApiSupport.encodePathSegment(context.getOwner())
                 + "/"
-                + encodePathSegment(context.getRepository())
+                + GithubApiSupport.encodePathSegment(context.getRepository())
                 + "/issues/"
                 + context.getPullRequestNumber()
                 + "/comments");
@@ -179,9 +155,9 @@ public class GithubPullRequestCommentClient {
     private URI commentUpdateUri(PrContext context, long commentId) {
         return URI.create(apiBaseUrl
                 + "/repos/"
-                + encodePathSegment(context.getOwner())
+                + GithubApiSupport.encodePathSegment(context.getOwner())
                 + "/"
-                + encodePathSegment(context.getRepository())
+                + GithubApiSupport.encodePathSegment(context.getRepository())
                 + "/issues/comments/"
                 + commentId);
     }
@@ -190,14 +166,6 @@ public class GithubPullRequestCommentClient {
         ObjectNode node = objectMapper.createObjectNode();
         node.put("body", body);
         return objectMapper.writeValueAsString(node);
-    }
-
-    private String requireGithubToken() {
-        String token = environment.getProperty("GITHUB_TOKEN");
-        if (token == null || token.isBlank()) {
-            throw new IllegalStateException("GITHUB_TOKEN must be configured to write pull request comments");
-        }
-        return token;
     }
 
     private long readCommentId(String body) {
@@ -236,15 +204,4 @@ public class GithubPullRequestCommentClient {
                 || body.contains("## PRysm Review Result"));
     }
 
-    private static String trimTrailingSlash(String value) {
-        String trimmed = value.trim();
-        if (trimmed.endsWith("/")) {
-            return trimmed.substring(0, trimmed.length() - 1);
-        }
-        return trimmed;
-    }
-
-    private static String encodePathSegment(String value) {
-        return URLEncoder.encode(value, StandardCharsets.UTF_8).replace("+", "%20");
-    }
 }

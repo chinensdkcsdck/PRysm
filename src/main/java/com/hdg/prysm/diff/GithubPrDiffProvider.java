@@ -1,6 +1,7 @@
 package com.hdg.prysm.diff;
 
 import com.hdg.prysm.context.PrContext;
+import com.hdg.prysm.github.GithubApiSupport;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.env.Environment;
@@ -10,11 +11,9 @@ import tools.jackson.databind.ObjectMapper;
 
 import java.io.IOException;
 import java.net.URI;
-import java.net.URLEncoder;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
-import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
@@ -79,9 +78,6 @@ public class GithubPrDiffProvider implements PrDiffProvider {
         if (httpClient == null) {
             throw new IllegalArgumentException("HTTP client must not be null");
         }
-        if (apiBaseUrl == null || apiBaseUrl.isBlank()) {
-            throw new IllegalArgumentException("GitHub API base URL must not be blank");
-        }
         if (maxFiles <= 0) {
             throw new IllegalArgumentException("Maximum changed file count must be positive");
         }
@@ -92,7 +88,7 @@ public class GithubPrDiffProvider implements PrDiffProvider {
         this.environment = environment;
         this.objectMapper = objectMapper;
         this.httpClient = httpClient;
-        this.apiBaseUrl = trimTrailingSlash(apiBaseUrl);
+        this.apiBaseUrl = GithubApiSupport.trimTrailingSlash(apiBaseUrl);
         this.maxFiles = maxFiles;
         this.maxPatchCharacters = maxPatchCharacters;
     }
@@ -106,7 +102,7 @@ public class GithubPrDiffProvider implements PrDiffProvider {
             throw new IllegalArgumentException("Pull request context must not be null");
         }
 
-        String token = requireGithubToken();
+        String token = GithubApiSupport.requireToken(environment, "fetch pull request diff");
         List<PrChangedFile> changedFiles = new ArrayList<>();
         int usedPatchCharacters = 0;
 
@@ -147,19 +143,13 @@ public class GithubPrDiffProvider implements PrDiffProvider {
      * 请求 GitHub changed files API 的指定分页。
      */
     private JsonNode fetchChangedFilesPage(PrContext context, String token, int page) {
-        HttpRequest request = HttpRequest.newBuilder(changedFilesUri(context, page))
-                .timeout(Duration.ofSeconds(30))
-                .header("Accept", "application/vnd.github+json")
-                .header("Authorization", "Bearer " + token)
-                .header("X-GitHub-Api-Version", "2022-11-28")
+        HttpRequest request = GithubApiSupport.requestBuilder(changedFilesUri(context, page), token)
                 .GET()
                 .build();
 
         try {
             HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
-            if (response.statusCode() < 200 || response.statusCode() >= 300) {
-                throw new IllegalStateException("GitHub changed files request failed with status " + response.statusCode());
-            }
+            GithubApiSupport.requireSuccess(response, "GitHub changed files request");
             return objectMapper.readTree(response.body());
         } catch (IOException exception) {
             throw new IllegalStateException("Failed to read GitHub changed files response", exception);
@@ -175,26 +165,15 @@ public class GithubPrDiffProvider implements PrDiffProvider {
     private URI changedFilesUri(PrContext context, int page) {
         return URI.create(apiBaseUrl
                 + "/repos/"
-                + encodePathSegment(context.getOwner())
+                + GithubApiSupport.encodePathSegment(context.getOwner())
                 + "/"
-                + encodePathSegment(context.getRepository())
+                + GithubApiSupport.encodePathSegment(context.getRepository())
                 + "/pulls/"
                 + context.getPullRequestNumber()
                 + "/files?per_page="
                 + PER_PAGE
                 + "&page="
                 + page);
-    }
-
-    /**
-     * 读取 GitHub API Token，缺失时直接失败。
-     */
-    private String requireGithubToken() {
-        String token = environment.getProperty("GITHUB_TOKEN");
-        if (token == null || token.isBlank()) {
-            throw new IllegalStateException("GITHUB_TOKEN must be configured to fetch pull request diff");
-        }
-        return token;
     }
 
     /**
@@ -243,21 +222,4 @@ public class GithubPrDiffProvider implements PrDiffProvider {
         return patch.substring(0, remainingCharacters);
     }
 
-    /**
-     * 去掉配置中的结尾斜杠，避免拼接 URL 时出现重复斜杠。
-     */
-    private static String trimTrailingSlash(String value) {
-        String trimmed = value.trim();
-        if (trimmed.endsWith("/")) {
-            return trimmed.substring(0, trimmed.length() - 1);
-        }
-        return trimmed;
-    }
-
-    /**
-     * 编码 URL path segment，避免 owner 或 repo 名包含特殊字符时拼接出错。
-     */
-    private static String encodePathSegment(String value) {
-        return URLEncoder.encode(value, StandardCharsets.UTF_8).replace("+", "%20");
-    }
 }
