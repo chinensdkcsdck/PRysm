@@ -54,7 +54,11 @@ class ReviewExecutionInputAssemblerTest {
         assertTrue(input.getPromptPayload().getSystemPrompt().contains("必须使用简体中文"));
         assertTrue(input.getPromptPayload().getOutputSchema().contains("\"findings\""));
         assertTrue(input.getPromptPayload().getOutputSchema().contains("\"ruleId\""));
-        assertTrue(input.getPromptPayload().getOutputSchema().contains("使用简体中文描述问题标题"));
+        assertTrue(input.getPromptPayload().getSystemPrompt().contains("变更总结"));
+        assertTrue(input.getPromptPayload().getSystemPrompt().contains("风险原因"));
+        assertTrue(input.getPromptPayload().getSystemPrompt().contains("可执行 Review 建议"));
+        assertTrue(input.getPromptPayload().getOutputSchema().contains("变更总结"));
+        assertTrue(input.getPromptPayload().getOutputSchema().contains("使用简体中文描述风险标题"));
     }
 
     /**
@@ -170,7 +174,7 @@ class ReviewExecutionInputAssemblerTest {
         assertTrue(input.getPromptPayload().getOutputSchema().length() < 400);
         assertTrue(input.getPromptPayload().getOutputSchema().contains("\"confidence\""));
         assertTrue(input.getPromptPayload().getOutputSchema().contains("\"category\""));
-        assertTrue(input.getPromptPayload().getOutputSchema().contains("简体中文"));
+        assertTrue(input.getPromptPayload().getOutputSchema().contains("简体中文 PR 变更总结"));
         assertTrue(compactContext.getOriginalPromptCharacters() > compactContext.getCompactPromptCharacters());
         assertTrue(compactContext.getPromptCharactersSaved() > 0);
         assertTrue(compactContext.getPromptCompactRatio() < 1);

@@ -38,44 +38,55 @@ public class ReviewCommentRenderer {
                     .append(escapeMarkdownText(notice))
                     .append("\n\n");
         }
-        markdown.append("发现 ")
-                .append(result.getFindings().size())
-                .append(" 个问题。");
-        markdown.append("规则结果: ")
-                .append(result.getRuleFindingCount())
-                .append("，模型结果: ")
-                .append(result.getLlmFindingCount())
-                .append("，去重数量: ")
-                .append(result.getDuplicateCount())
-                .append("。\n\n");
-
+        appendOverview(markdown, result);
+        appendSummary(markdown, "变更总结", result.getLlmSummary());
         appendSummary(markdown, "规则摘要", result.getRuleSummary());
-        appendSummary(markdown, "模型摘要", result.getLlmSummary());
 
         if (!result.hasFindings()) {
-            markdown.append("未发现需要处理的明确问题。\n");
+            markdown.append("### 风险代码\n\n");
+            markdown.append("未发现需要处理的明确风险。\n\n");
+            markdown.append("### Review 建议\n\n");
+            markdown.append("当前没有需要立即处理的修改建议，建议结合业务场景继续进行人工确认。\n");
             return markdown.toString();
         }
 
+        markdown.append("### 风险代码\n\n");
         for (Map.Entry<String, List<ReviewFinding>> entry : groupByFile(result.getFindings()).entrySet()) {
-            markdown.append("### ")
+            markdown.append("#### ")
                     .append(escapeMarkdownText(displayFilePath(entry.getKey())))
                     .append("\n\n");
             for (ReviewFinding finding : entry.getValue()) {
                 appendFinding(markdown, finding);
             }
         }
+        appendReviewSuggestions(markdown, result.getFindings());
 
         return markdown.toString();
+    }
+
+    private static void appendOverview(StringBuilder markdown, ReviewAggregationResult result) {
+        markdown.append("### 审查概览\n\n");
+        markdown.append("- 发现问题: ")
+                .append(result.getFindings().size())
+                .append('\n');
+        markdown.append("- 规则结果: ")
+                .append(result.getRuleFindingCount())
+                .append('\n');
+        markdown.append("- 模型结果: ")
+                .append(result.getLlmFindingCount())
+                .append('\n');
+        markdown.append("- 去重数量: ")
+                .append(result.getDuplicateCount())
+                .append("\n\n");
     }
 
     private static void appendSummary(StringBuilder markdown, String label, String summary) {
         if (summary == null || summary.isBlank()) {
             return;
         }
-        markdown.append("**")
+        markdown.append("### ")
                 .append(label)
-                .append(":** ")
+                .append("\n\n")
                 .append(escapeMarkdownText(summary.trim()))
                 .append("\n\n");
     }
@@ -118,6 +129,29 @@ public class ReviewCommentRenderer {
                     .append("\n");
         }
         markdown.append("\n");
+    }
+
+    private static void appendReviewSuggestions(StringBuilder markdown, List<ReviewFinding> findings) {
+        markdown.append("### Review 建议\n\n");
+        int index = 1;
+        for (ReviewFinding finding : findings) {
+            if (finding.getSuggestion() == null || finding.getSuggestion().isBlank()) {
+                continue;
+            }
+            markdown.append(index++)
+                    .append(". ");
+            String filePath = displayFilePath(finding.getFilePath());
+            if (!filePath.isBlank()) {
+                markdown.append("`")
+                        .append(escapeCodeText(filePath))
+                        .append("`: ");
+            }
+            markdown.append(escapeMarkdownText(finding.getSuggestion()))
+                    .append("\n");
+        }
+        if (index == 1) {
+            markdown.append("暂无可执行的修改建议，请结合风险说明进行人工确认。\n");
+        }
     }
 
     private static String location(ReviewFinding finding) {

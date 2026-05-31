@@ -37,11 +37,19 @@ class ReviewCommentRendererTest {
         String markdown = new ReviewCommentRenderer().render(result);
 
         assertTrue(markdown.contains("## PRysm 审查结果"));
-        assertTrue(markdown.contains("发现 1 个问题。规则结果: 1，模型结果: 0，去重数量: 0。"));
-        assertTrue(markdown.contains("### src/App.java"));
+        assertTrue(markdown.contains("### 审查概览"));
+        assertTrue(markdown.contains("- 发现问题: 1"));
+        assertTrue(markdown.contains("- 规则结果: 1"));
+        assertTrue(markdown.contains("- 模型结果: 0"));
+        assertTrue(markdown.contains("- 去重数量: 0"));
+        assertTrue(markdown.contains("### 变更总结"));
+        assertTrue(markdown.contains("### 风险代码"));
+        assertTrue(markdown.contains("#### src/App.java"));
         assertTrue(markdown.contains("**[HIGH] Merge conflict marker found** (第 12 行)"));
         assertTrue(markdown.contains("来源: `builtin` / 规则: `BUILTIN_CONFLICT_MARKER`"));
         assertTrue(markdown.contains("建议: Resolve the marker."));
+        assertTrue(markdown.contains("### Review 建议"));
+        assertTrue(markdown.contains("1. `src/App.java`: Resolve the marker."));
     }
 
     @Test
@@ -57,7 +65,10 @@ class ReviewCommentRendererTest {
 
         String markdown = new ReviewCommentRenderer().render(result);
 
-        assertTrue(markdown.contains("发现 0 个问题。"));
-        assertTrue(markdown.contains("未发现需要处理的明确问题。"));
+        assertTrue(markdown.contains("- 发现问题: 0"));
+        assertTrue(markdown.contains("### 风险代码"));
+        assertTrue(markdown.contains("未发现需要处理的明确风险。"));
+        assertTrue(markdown.contains("### Review 建议"));
+        assertTrue(markdown.contains("当前没有需要立即处理的修改建议"));
     }
 }
