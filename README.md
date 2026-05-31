@@ -16,6 +16,12 @@ PRysm 是一个基于 GitHub Pull Request 的 AI 代码评审助手。它通过 
 
 ## 效果展示
 
+Demo 视频：
+
+```text
+https://www.bilibili.com/video/BV1CCVU65EHm/
+```
+
 演示 PR：
 
 ```text
