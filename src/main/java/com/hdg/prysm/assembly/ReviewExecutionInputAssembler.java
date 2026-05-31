@@ -51,14 +51,16 @@ public class ReviewExecutionInputAssembler {
                   "title": "问题标题",
                   "message": "说明为什么这是问题。",
                   "suggestion": "给出具体修改方向。",
-                  "ruleId": "LLM_RULE_ID"
+                  "ruleId": "LLM_RULE_ID",
+                  "confidence": "HIGH|MEDIUM|LOW",
+                  "category": "bug|security|secret|workflow|config|test|maintainability|documentation"
                 }
               ]
             }
             """;
 
     private static final String COMPACT_OUTPUT_SCHEMA = """
-            {"summary":"string","findings":[{"severity":"error|warning|info","filePath":"string","startLine":1,"endLine":1,"line":1,"title":"string","message":"string","suggestion":"string","ruleId":"LLM_RULE_ID"}]}
+            {"summary":"string","findings":[{"severity":"error|warning|info","filePath":"string","startLine":1,"endLine":1,"line":1,"title":"string","message":"string","suggestion":"string","ruleId":"LLM_RULE_ID","confidence":"HIGH|MEDIUM|LOW","category":"bug|security|secret|workflow|config|test|maintainability|documentation"}]}
             """;
 
     private final LlmOptimizationProperties optimizationProperties;

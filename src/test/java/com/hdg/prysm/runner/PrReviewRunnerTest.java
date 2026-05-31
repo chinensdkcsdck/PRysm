@@ -22,6 +22,7 @@ import com.hdg.prysm.llm.LlmReviewRunner;
 import com.hdg.prysm.optimization.LlmOptimizationContext;
 import com.hdg.prysm.optimization.LlmOptimizationPlanner;
 import com.hdg.prysm.optimization.LlmOptimizationProperties;
+import com.hdg.prysm.quality.ReviewFindingQualityGate;
 import com.hdg.prysm.review.PrReviewContext;
 import com.hdg.prysm.review.PrReviewContextLoader;
 import com.hdg.prysm.result.ReviewAggregationResult;
@@ -48,7 +49,7 @@ import static org.mockito.Mockito.when;
 class PrReviewRunnerTest {
 
     /**
-     * Runner 开关关闭时，不应解析 PR 上下文。
+     * Runner 寮€鍏冲叧闂椂锛屼笉搴旇В鏋?PR 涓婁笅鏂囥€?
      */
     @Test
     void shouldSkipWhenRunnerIsDisabled() {
@@ -81,6 +82,7 @@ class PrReviewRunnerTest {
                 aggregator,
                 commentRenderer,
                 commentClient,
+                new ReviewFindingQualityGate(),
                 baselineOptimizationProperties(),
                 baselineOptimizationPlanner(),
                 new LlmOptimizationContext(),
@@ -112,7 +114,7 @@ class PrReviewRunnerTest {
     }
 
     /**
-     * 非 GitHub Actions 环境中，本地启动不应触发 PR 解析。
+     * 闈?GitHub Actions 鐜涓紝鏈湴鍚姩涓嶅簲瑙﹀彂 PR 瑙ｆ瀽銆?
      */
     @Test
     void shouldSkipWhenNotRunningInGithubActions() {
@@ -145,6 +147,7 @@ class PrReviewRunnerTest {
                 aggregator,
                 commentRenderer,
                 commentClient,
+                new ReviewFindingQualityGate(),
                 baselineOptimizationProperties(),
                 baselineOptimizationPlanner(),
                 new LlmOptimizationContext(),
@@ -176,7 +179,7 @@ class PrReviewRunnerTest {
     }
 
     /**
-     * GitHub Actions 环境中启用 Runner 时，应串起上下文加载、预算、输入组装和扩展上下文门禁。
+     * GitHub Actions 鐜涓惎鐢?Runner 鏃讹紝搴斾覆璧蜂笂涓嬫枃鍔犺浇銆侀绠椼€佽緭鍏ョ粍瑁呭拰鎵╁睍涓婁笅鏂囬棬绂併€?
      */
     @Test
     void shouldRunReviewContextSelectionBudgetInputAssemblyAndEnrichmentWhenRunningInGithubActions() {
@@ -235,7 +238,11 @@ class PrReviewRunnerTest {
         when(enrichmentService.enrich(executionInput)).thenReturn(enrichedInput);
         when(ruleEngineRunner.run(enrichedInput)).thenReturn(ruleResult);
         when(llmReviewRunner.run(enrichedInput)).thenReturn(llmResult);
-        when(aggregator.aggregate(enrichedInput, ruleResult, llmResult)).thenReturn(aggregationResult);
+        when(aggregator.aggregate(
+                org.mockito.ArgumentMatchers.eq(enrichedInput),
+                org.mockito.ArgumentMatchers.eq(ruleResult),
+                org.mockito.ArgumentMatchers.any(LlmReviewResult.class)
+        )).thenReturn(aggregationResult);
         when(commentRenderer.renderFastReview(aggregationResult)).thenReturn("fast review comment");
         when(commentRenderer.render(aggregationResult)).thenReturn("review comment");
         when(commentClient.findExistingReviewComment(context)).thenReturn(OptionalLong.empty());
@@ -255,6 +262,7 @@ class PrReviewRunnerTest {
                 aggregator,
                 commentRenderer,
                 commentClient,
+                new ReviewFindingQualityGate(),
                 baselineOptimizationProperties(),
                 baselineOptimizationPlanner(),
                 new LlmOptimizationContext(),
@@ -278,7 +286,11 @@ class PrReviewRunnerTest {
         verify(enrichmentService).enrich(executionInput);
         verify(ruleEngineRunner).run(enrichedInput);
         verify(llmReviewRunner, times(2)).run(enrichedInput);
-        verify(aggregator, times(2)).aggregate(enrichedInput, ruleResult, llmResult);
+        verify(aggregator, times(2)).aggregate(
+                org.mockito.ArgumentMatchers.eq(enrichedInput),
+                org.mockito.ArgumentMatchers.eq(ruleResult),
+                org.mockito.ArgumentMatchers.any(LlmReviewResult.class)
+        );
         verify(commentRenderer).render(aggregationResult);
         verify(commentRenderer).renderFastReview(aggregationResult);
         verify(commentClient).createComment(context, "fast review comment");
@@ -344,7 +356,11 @@ class PrReviewRunnerTest {
         when(enrichmentService.enrich(executionInput)).thenReturn(enrichedInput);
         when(ruleEngineRunner.run(enrichedInput)).thenReturn(ruleResult);
         when(llmReviewRunner.run(enrichedInput)).thenReturn(llmResult);
-        when(aggregator.aggregate(enrichedInput, ruleResult, llmResult)).thenReturn(aggregationResult);
+        when(aggregator.aggregate(
+                org.mockito.ArgumentMatchers.eq(enrichedInput),
+                org.mockito.ArgumentMatchers.eq(ruleResult),
+                org.mockito.ArgumentMatchers.any(LlmReviewResult.class)
+        )).thenReturn(aggregationResult);
         when(commentRenderer.renderFastReview(aggregationResult)).thenReturn("fast review comment");
         when(commentRenderer.render(aggregationResult)).thenReturn("review comment");
         when(commentClient.findExistingReviewComment(context)).thenReturn(OptionalLong.of(12345L));
@@ -363,6 +379,7 @@ class PrReviewRunnerTest {
                 aggregator,
                 commentRenderer,
                 commentClient,
+                new ReviewFindingQualityGate(),
                 baselineOptimizationProperties(),
                 baselineOptimizationPlanner(),
                 new LlmOptimizationContext(),
@@ -384,7 +401,7 @@ class PrReviewRunnerTest {
     }
 
     /**
-     * 评论回写关闭时，仍完成 PR12 聚合和渲染，但不调用 GitHub 回写。
+     * 璇勮鍥炲啓鍏抽棴鏃讹紝浠嶅畬鎴?PR12 鑱氬悎鍜屾覆鏌擄紝浣嗕笉璋冪敤 GitHub 鍥炲啓銆?
      */
     @Test
     void shouldSkipGithubCommentWhenCommentWritingIsDisabled() {
@@ -440,7 +457,11 @@ class PrReviewRunnerTest {
         when(enrichmentService.enrich(executionInput)).thenReturn(enrichedInput);
         when(ruleEngineRunner.run(enrichedInput)).thenReturn(ruleResult);
         when(llmReviewRunner.run(enrichedInput)).thenReturn(llmResult);
-        when(aggregator.aggregate(enrichedInput, ruleResult, llmResult)).thenReturn(aggregationResult);
+        when(aggregator.aggregate(
+                org.mockito.ArgumentMatchers.eq(enrichedInput),
+                org.mockito.ArgumentMatchers.eq(ruleResult),
+                org.mockito.ArgumentMatchers.any(LlmReviewResult.class)
+        )).thenReturn(aggregationResult);
         when(commentRenderer.renderFastReview(aggregationResult)).thenReturn("fast review comment");
         when(commentRenderer.render(aggregationResult)).thenReturn("review comment");
         MockEnvironment environment = new MockEnvironment()
@@ -458,6 +479,7 @@ class PrReviewRunnerTest {
                 aggregator,
                 commentRenderer,
                 commentClient,
+                new ReviewFindingQualityGate(),
                 baselineOptimizationProperties(),
                 baselineOptimizationPlanner(),
                 new LlmOptimizationContext(),
@@ -474,7 +496,11 @@ class PrReviewRunnerTest {
 
         verify(enrichmentService).enrich(executionInput);
         verify(llmReviewRunner).run(enrichedInput);
-        verify(aggregator).aggregate(enrichedInput, ruleResult, llmResult);
+        verify(aggregator).aggregate(
+                org.mockito.ArgumentMatchers.eq(enrichedInput),
+                org.mockito.ArgumentMatchers.eq(ruleResult),
+                org.mockito.ArgumentMatchers.any(LlmReviewResult.class)
+        );
         verify(commentRenderer, never()).renderFastReview(aggregationResult);
         verify(commentRenderer).render(aggregationResult);
         verify(commentClient, never()).createComment(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any());
@@ -482,7 +508,7 @@ class PrReviewRunnerTest {
     }
 
     /**
-     * 执行阶段失败时，也应通过 finally 输出 trace summary。
+     * 鎵ц闃舵澶辫触鏃讹紝涔熷簲閫氳繃 finally 杈撳嚭 trace summary銆?
      */
     @Test
     void shouldReportTraceWhenReviewFails() {
@@ -518,6 +544,7 @@ class PrReviewRunnerTest {
                 aggregator,
                 commentRenderer,
                 commentClient,
+                new ReviewFindingQualityGate(),
                 baselineOptimizationProperties(),
                 baselineOptimizationPlanner(),
                 new LlmOptimizationContext(),
@@ -555,3 +582,4 @@ class PrReviewRunnerTest {
         return new LlmOptimizationPlanner(baselineOptimizationProperties(), "test-model");
     }
 }
+

@@ -30,7 +30,9 @@ class LlmReviewResponseParserTest {
                       "title": "Bug",
                       "message": "This can fail.",
                       "suggestion": "Handle the edge case.",
-                      "ruleId": "LLM_BUG"
+                      "ruleId": "LLM_BUG",
+                      "confidence": "HIGH",
+                      "category": "bug"
                     }
                   ]
                 }
@@ -46,6 +48,8 @@ class LlmReviewResponseParserTest {
         assertEquals(12, finding.getLine());
         assertEquals("RIGHT", finding.getSide());
         assertEquals("LLM_BUG", finding.getRuleId());
+        assertEquals("HIGH", finding.getConfidence());
+        assertEquals("bug", finding.getCategory());
     }
 
     /**

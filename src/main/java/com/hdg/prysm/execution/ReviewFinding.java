@@ -17,6 +17,8 @@ public class ReviewFinding {
     private final String message;
     private final String suggestion;
     private final String ruleId;
+    private final String confidence;
+    private final String category;
 
     public ReviewFinding(
             String source,
@@ -31,6 +33,40 @@ public class ReviewFinding {
             String message,
             String suggestion,
             String ruleId
+    ) {
+        this(
+                source,
+                severity,
+                filePath,
+                startLine,
+                endLine,
+                side,
+                line,
+                startSide,
+                title,
+                message,
+                suggestion,
+                ruleId,
+                null,
+                null
+        );
+    }
+
+    public ReviewFinding(
+            String source,
+            String severity,
+            String filePath,
+            Integer startLine,
+            Integer endLine,
+            String side,
+            Integer line,
+            String startSide,
+            String title,
+            String message,
+            String suggestion,
+            String ruleId,
+            String confidence,
+            String category
     ) {
         if (source == null || source.isBlank()) {
             throw new IllegalArgumentException("Finding source must not be blank");
@@ -63,6 +99,8 @@ public class ReviewFinding {
         this.message = message;
         this.suggestion = suggestion;
         this.ruleId = ruleId;
+        this.confidence = normalizeOptional(confidence);
+        this.category = normalizeOptional(category);
     }
 
     public String getSource() {
@@ -113,9 +151,24 @@ public class ReviewFinding {
         return ruleId;
     }
 
+    public String getConfidence() {
+        return confidence;
+    }
+
+    public String getCategory() {
+        return category;
+    }
+
     private static void validateLine(String fieldName, Integer line) {
         if (line != null && line <= 0) {
             throw new IllegalArgumentException(fieldName + " must be positive when present");
         }
+    }
+
+    private static String normalizeOptional(String value) {
+        if (value == null || value.isBlank()) {
+            return null;
+        }
+        return value.trim();
     }
 }
