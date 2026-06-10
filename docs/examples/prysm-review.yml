@@ -11,6 +11,6 @@ permissions:
 
 jobs:
   review:
-    uses: Remohdg/PRysm-hdg/.github/workflows/prysm-review-reusable.yml@main
+    uses: chinensdkcsdck/PRysm/.github/workflows/prysm-review-reusable.yml@main
     secrets:
       LLM_API_KEY: ${{ secrets.LLM_API_KEY }}

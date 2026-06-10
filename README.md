@@ -83,7 +83,7 @@ permissions:
 
 jobs:
   review:
-    uses: Remohdg/PRysm-hdg/.github/workflows/prysm-review-reusable.yml@main
+    uses: chinensdkcsdck/PRysm/.github/workflows/prysm-review-reusable.yml@main
     secrets:
       LLM_API_KEY: ${{ secrets.LLM_API_KEY }}
 ```
@@ -110,7 +110,7 @@ Secret: 你的模型 API Key
 | `LLM_API_KEY` | 是 | 无 | 模型服务 API Key，通过 GitHub Actions Repository secret 配置。 |
 | `llm-api-base-url` | 否 | `https://dashscope.aliyuncs.com/compatible-mode/v1` | OpenAI 兼容接口地址。 |
 | `llm-model` | 否 | `qwen-plus` | 审查使用的模型名称。 |
-| `prysm-release-repository` | 否 | `Remohdg/PRysm-hdg` | 下载 `prysm.jar` 的 release 仓库。 |
+| `prysm-release-repository` | 否 | `chinensdkcsdck/PRysm` | 下载 `prysm.jar` 的 release 仓库。 |
 | `prysm-release-tag` | 否 | `latest` | 下载指定 release 版本；默认使用最新 release。 |
 
 ## 模型配置
@@ -129,7 +129,7 @@ LLM_MODEL=qwen-plus
 ```yaml
 jobs:
   review:
-    uses: Remohdg/PRysm-hdg/.github/workflows/prysm-review-reusable.yml@main
+    uses: chinensdkcsdck/PRysm/.github/workflows/prysm-review-reusable.yml@main
     with:
       llm-api-base-url: https://dashscope.aliyuncs.com/compatible-mode/v1
       llm-model: qwen-plus
@@ -225,7 +225,7 @@ PRysm 主要运行在 GitHub Actions 中。release 中已提供 `prysm.jar`，wo
 Release jar：
 
 ```text
-https://github.com/Remohdg/PRysm-hdg/releases/latest/download/prysm.jar
+https://github.com/chinensdkcsdck/PRysm/releases/latest/download/prysm.jar
 ```
 
 本地调试时可以执行：

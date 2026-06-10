@@ -6,7 +6,7 @@ on:
       prysm-repository:
         required: false
         type: string
-        default: Remohdg/PRysm-hdg
+        default: chinensdkcsdck/PRysm
       prysm-ref:
         required: false
         type: string
@@ -14,7 +14,7 @@ on:
       prysm-release-repository:
         required: false
         type: string
-        default: Remohdg/PRysm-hdg
+        default: chinensdkcsdck/PRysm
       prysm-release-tag:
         required: false
         type: string

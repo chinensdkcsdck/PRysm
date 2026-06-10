@@ -14,7 +14,7 @@ permissions:
   issues: write
 
 env:
-  PRYSM_RELEASE_REPOSITORY: Remohdg/PRysm-hdg
+  PRYSM_RELEASE_REPOSITORY: chinensdkcsdck/PRysm
   PRYSM_RELEASE_TAG: latest
   LLM_API_BASE_URL: ${{ vars.LLM_API_BASE_URL || 'https://dashscope.aliyuncs.com/compatible-mode/v1' }}
   LLM_MODEL: ${{ vars.LLM_MODEL || 'qwen-plus' }}
