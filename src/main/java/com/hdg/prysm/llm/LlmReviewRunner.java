@@ -60,8 +60,8 @@ public class LlmReviewRunner {
         }
 
         try {
-            String rawResponse = client.review(input.getPromptPayload());
-            return parser.parse(rawResponse);
+            LlmReviewClientResponse response = client.review(input.getPromptPayload());
+            return parser.parse(response.getContent()).withTokenUsage(response.getTokenUsage());
         } catch (RuntimeException exception) {
             return new LlmReviewResult(List.of(), "LLM review failed: " + exception.getMessage(), null);
         }

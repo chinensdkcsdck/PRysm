@@ -7,6 +7,7 @@ import com.hdg.prysm.diff.PrDiff;
 import com.hdg.prysm.execution.ContextStatus;
 import com.hdg.prysm.execution.ContextStatusCode;
 import com.hdg.prysm.execution.LlmReviewResult;
+import com.hdg.prysm.execution.LlmTokenUsage;
 import com.hdg.prysm.execution.PromptPayload;
 import com.hdg.prysm.execution.ReviewExecutionInput;
 import com.hdg.prysm.execution.ReviewFinding;
@@ -71,7 +72,7 @@ class LlmReviewRunnerTest {
      */
     @Test
     void shouldReturnParsedResultWhenClientSucceeds() {
-        LlmReviewClient client = promptPayload -> """
+        LlmReviewClient client = promptPayload -> LlmReviewClientResponse.contentOnly("""
                 {
                   "summary": "one issue",
                   "findings": [
@@ -86,7 +87,7 @@ class LlmReviewRunnerTest {
                     }
                   ]
                 }
-                """;
+                """);
         LlmReviewRunner runner = new LlmReviewRunner(
                 client,
                 new LlmReviewResponseParser(new ObjectMapper()),
@@ -101,6 +102,31 @@ class LlmReviewRunnerTest {
         assertEquals("llm", finding.getSource());
         assertEquals("src/App.java", finding.getFilePath());
         assertEquals(12, finding.getLine());
+    }
+
+    @Test
+    void shouldKeepTokenUsageWhenClientReturnsUsage() {
+        LlmReviewClient client = promptPayload -> new LlmReviewClientResponse(
+                """
+                {
+                  "summary": "ok",
+                  "findings": []
+                }
+                """,
+                new LlmTokenUsage(120, 30, 150)
+        );
+        LlmReviewRunner runner = new LlmReviewRunner(
+                client,
+                new LlmReviewResponseParser(new ObjectMapper()),
+                true
+        );
+
+        LlmReviewResult result = runner.run(newInput(ContextStatusCode.FULL, "ready"));
+
+        assertEquals("ok", result.getSummary());
+        assertEquals(120, result.getTokenUsage().getPromptTokens());
+        assertEquals(30, result.getTokenUsage().getCompletionTokens());
+        assertEquals(150, result.getTokenUsage().getTotalTokens());
     }
 
     /**
@@ -129,7 +155,7 @@ class LlmReviewRunnerTest {
     @Test
     void shouldRejectNullInput() {
         LlmReviewRunner runner = new LlmReviewRunner(
-                promptPayload -> "{}",
+                promptPayload -> LlmReviewClientResponse.contentOnly("{}"),
                 new LlmReviewResponseParser(new ObjectMapper()),
                 true
         );

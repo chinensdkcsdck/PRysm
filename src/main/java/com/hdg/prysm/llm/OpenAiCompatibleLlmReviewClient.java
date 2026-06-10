@@ -1,5 +1,6 @@
 package com.hdg.prysm.llm;
 
+import com.hdg.prysm.execution.LlmTokenUsage;
 import com.hdg.prysm.execution.PromptPayload;
 import com.hdg.prysm.optimization.LlmOptimizationContext;
 import com.hdg.prysm.optimization.LlmOptimizationProperties;
@@ -177,7 +178,7 @@ public class OpenAiCompatibleLlmReviewClient implements LlmReviewClient {
      * 调用 OpenAI-compatible Chat Completions API 并提取模型内容。
      */
     @Override
-    public String review(PromptPayload promptPayload) {
+    public LlmReviewClientResponse review(PromptPayload promptPayload) {
         if (promptPayload == null) {
             throw new IllegalArgumentException("Prompt payload must not be null");
         }
@@ -195,7 +196,7 @@ public class OpenAiCompatibleLlmReviewClient implements LlmReviewClient {
             if (response.statusCode() < 200 || response.statusCode() >= 300) {
                 throw new IllegalStateException("LLM request failed with status " + response.statusCode());
             }
-            return extractContent(response.body());
+            return extractResponse(response.body());
         } catch (IOException exception) {
             throw new IllegalStateException("Failed to read LLM response", exception);
         } catch (InterruptedException exception) {
@@ -239,7 +240,7 @@ public class OpenAiCompatibleLlmReviewClient implements LlmReviewClient {
     /**
      * 从 Chat Completions 响应中提取 choices[0].message.content。
      */
-    private String extractContent(String responseBody) {
+    private LlmReviewClientResponse extractResponse(String responseBody) {
         JsonNode root = objectMapper.readTree(responseBody);
         JsonNode choices = root.get("choices");
         if (choices == null || !choices.isArray() || choices.isEmpty()) {
@@ -249,7 +250,36 @@ public class OpenAiCompatibleLlmReviewClient implements LlmReviewClient {
         if (content == null || content.isNull() || content.asText().isBlank()) {
             throw new IllegalStateException("LLM response content must not be blank");
         }
-        return content.asText();
+        return new LlmReviewClientResponse(content.asText(), extractUsage(root));
+    }
+
+    /**
+     * Extract token usage when the provider includes an OpenAI-compatible usage object.
+     */
+    private static LlmTokenUsage extractUsage(JsonNode root) {
+        JsonNode usage = root.get("usage");
+        if (usage == null || usage.isNull()) {
+            return null;
+        }
+
+        Integer promptTokens = readNullableInt(usage, "prompt_tokens");
+        Integer completionTokens = readNullableInt(usage, "completion_tokens");
+        Integer totalTokens = readNullableInt(usage, "total_tokens");
+        if (promptTokens == null && completionTokens == null && totalTokens == null) {
+            return null;
+        }
+        return new LlmTokenUsage(promptTokens, completionTokens, totalTokens);
+    }
+
+    private static Integer readNullableInt(JsonNode node, String fieldName) {
+        JsonNode value = node.get(fieldName);
+        if (value == null || value.isNull()) {
+            return null;
+        }
+        if (!value.canConvertToInt()) {
+            throw new IllegalStateException("LLM usage field must be an integer: " + fieldName);
+        }
+        return value.asInt();
     }
 
     /**

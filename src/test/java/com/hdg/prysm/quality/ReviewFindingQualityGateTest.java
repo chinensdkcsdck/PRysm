@@ -7,6 +7,7 @@ import com.hdg.prysm.diff.PrDiff;
 import com.hdg.prysm.execution.ContextStatus;
 import com.hdg.prysm.execution.ContextStatusCode;
 import com.hdg.prysm.execution.LlmReviewResult;
+import com.hdg.prysm.execution.LlmTokenUsage;
 import com.hdg.prysm.execution.PromptPayload;
 import com.hdg.prysm.execution.ReviewExecutionInput;
 import com.hdg.prysm.execution.ReviewFinding;
@@ -73,6 +74,23 @@ class ReviewFindingQualityGateTest {
 
         assertEquals(1, filtered.getFindings().size());
         assertEquals("real bug", filtered.getFindings().get(0).getTitle());
+    }
+
+    @Test
+    void shouldKeepTokenUsageAfterFiltering() {
+        ReviewExecutionInput input = input("src/App.java");
+        LlmReviewResult result = new LlmReviewResult(
+                List.of(finding("HIGH", "HIGH", "bug", "LLM_BUG", "src/App.java", 10, "real bug")),
+                "raw summary",
+                "{}",
+                new LlmTokenUsage(100, 20, 120)
+        );
+
+        LlmReviewResult filtered = gate.filterDeepReview(input, result);
+
+        assertEquals(100, filtered.getTokenUsage().getPromptTokens());
+        assertEquals(20, filtered.getTokenUsage().getCompletionTokens());
+        assertEquals(120, filtered.getTokenUsage().getTotalTokens());
     }
 
     private static ReviewExecutionInput input(String path) {
