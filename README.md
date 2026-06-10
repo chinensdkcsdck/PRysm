@@ -61,11 +61,13 @@ https://github.com/Remohdg/PRysm-test
 
 ## 正式接入自己的仓库
 
-在目标仓库中新增文件：
+在目标仓库的默认分支（通常是 `main`）中新增文件：
 
 ```text
 .github/workflows/prysm-review.yml
 ```
+
+这个文件必须提交到默认分支。`pull_request_target` 运行时读取的是目标仓库默认分支上的 workflow；如果只在 PR 分支里新增或修改这个文件，当前 PR 不会使用它。
 
 内容可以直接复制本仓库的 [docs/examples/prysm-review.yml](docs/examples/prysm-review.yml)，也可以使用下面这一份：
 
@@ -88,6 +90,8 @@ jobs:
       LLM_API_KEY: ${{ secrets.LLM_API_KEY }}
 ```
 
+注意：`name`、`on`、`permissions`、`jobs` 这几个顶层字段必须顶格写，前面不要加空格。YAML 缩进错误会导致 GitHub 无法识别 workflow，也就不会触发 PR 审查。
+
 然后在目标仓库配置模型密钥：
 
 ```text
@@ -102,6 +106,8 @@ Secret: 你的模型 API Key
 ```
 
 配置完成后，后续 PR 会自动触发 PRysm 审查并在 PR 评论区回写结果。
+
+如果是先创建了 PR，后来才把 workflow 加到 `main`，需要重新触发一次 PR 事件，例如向 PR 分支再 push 一个提交，或者关闭后重新打开 PR。只修改 workflow 文件本身不会让已经存在的 PR 自动重跑。
 
 ## 配置项
 
