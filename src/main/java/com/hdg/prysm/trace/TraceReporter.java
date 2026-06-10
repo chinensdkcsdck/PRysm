@@ -78,6 +78,9 @@ public class TraceReporter {
         putNullable(root, "duplicatesRemoved", summary.getDuplicatesRemoved());
         putNullable(root, "promptCharacters", summary.getPromptCharacters());
         putNullable(root, "estimatedPromptTokens", summary.getEstimatedPromptTokens());
+        putNullable(root, "promptTokens", summary.getPromptTokens());
+        putNullable(root, "completionTokens", summary.getCompletionTokens());
+        putNullable(root, "totalTokens", summary.getTotalTokens());
         putNullable(root, "tokenSource", summary.getTokenSource());
         putNullable(root, "commentWritten", summary.getCommentWritten());
         putNullable(root, "optimizationGroup", summary.getOptimizationGroup());

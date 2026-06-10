@@ -32,7 +32,8 @@ public class ReviewFindingQualityGate {
             return new LlmReviewResult(
                     List.of(),
                     "快速初筛完成：文档类变更未发现阻塞问题。深度审查仍在进行，稍后会更新本评论。",
-                    result.getRawResponse()
+                    result.getRawResponse(),
+                    result.getTokenUsage()
             );
         }
 
@@ -44,7 +45,8 @@ public class ReviewFindingQualityGate {
         return new LlmReviewResult(
                 findings,
                 fastSummary(findings),
-                result.getRawResponse()
+                result.getRawResponse(),
+                result.getTokenUsage()
         );
     }
 
@@ -60,7 +62,8 @@ public class ReviewFindingQualityGate {
         return new LlmReviewResult(
                 findings,
                 findings.isEmpty() ? "未发现需要在最终评论中展示的明确问题。" : result.getSummary(),
-                result.getRawResponse()
+                result.getRawResponse(),
+                result.getTokenUsage()
         );
     }
 

@@ -10,5 +10,5 @@ public interface LlmReviewClient {
     /**
      * 基于 prompt 载荷调用模型，并返回模型生成的原始 JSON 文本。
      */
-    String review(PromptPayload promptPayload);
+    LlmReviewClientResponse review(PromptPayload promptPayload);
 }

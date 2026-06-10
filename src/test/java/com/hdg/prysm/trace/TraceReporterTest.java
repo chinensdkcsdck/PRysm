@@ -42,6 +42,9 @@ class TraceReporterTest {
         llm.put("optimizationGroup", "baseline");
         llm.put("modelName", "qwen-plus");
         llm.put("effectiveModel", "qwen-plus");
+        llm.put("promptTokens", 30);
+        llm.put("completionTokens", 12);
+        llm.put("totalTokens", 42);
         llm.finish(TraceStatus.SUCCESS, Instant.now());
         context.addSpan(llm);
 
@@ -55,5 +58,8 @@ class TraceReporterTest {
         assertEquals("baseline", json.get("optimizationGroup").asText());
         assertEquals("qwen-plus", json.get("modelName").asText());
         assertEquals("qwen-plus", json.get("effectiveModel").asText());
+        assertEquals(30, json.get("promptTokens").asInt());
+        assertEquals(12, json.get("completionTokens").asInt());
+        assertEquals(42, json.get("totalTokens").asInt());
     }
 }

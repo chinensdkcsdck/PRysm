@@ -1,6 +1,7 @@
 package com.hdg.prysm.llm;
 
 import com.hdg.prysm.execution.PromptPayload;
+import com.hdg.prysm.execution.LlmTokenUsage;
 import com.hdg.prysm.optimization.LlmOptimizationContext;
 import com.hdg.prysm.optimization.LlmOptimizationDecision;
 import com.hdg.prysm.optimization.LlmOptimizationProperties;
@@ -71,7 +72,12 @@ class OpenAiCompatibleLlmReviewClientTest {
                                 "content": "{\\"summary\\":\\"ok\\",\\"findings\\":[]}"
                               }
                             }
-                          ]
+                          ],
+                          "usage": {
+                            "prompt_tokens": 41,
+                            "completion_tokens": 9,
+                            "total_tokens": 50
+                          }
                         }
                         """,
                         capturedRequest
@@ -81,9 +87,13 @@ class OpenAiCompatibleLlmReviewClientTest {
                 30
         );
 
-        String content = client.review(newPromptPayload());
+        LlmReviewClientResponse response = client.review(newPromptPayload());
+        LlmTokenUsage usage = response.getTokenUsage();
 
-        assertEquals("{\"summary\":\"ok\",\"findings\":[]}", content);
+        assertEquals("{\"summary\":\"ok\",\"findings\":[]}", response.getContent());
+        assertEquals(41, usage.getPromptTokens());
+        assertEquals(9, usage.getCompletionTokens());
+        assertEquals(50, usage.getTotalTokens());
         assertEquals(URI.create("https://api.example.com/v1/chat/completions"), capturedRequest.get().uri());
         assertEquals(Optional.of("Bearer secret"), capturedRequest.get().headers().firstValue("Authorization"));
     }

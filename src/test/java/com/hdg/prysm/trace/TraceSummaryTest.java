@@ -15,7 +15,10 @@ class TraceSummaryTest {
         TraceSpan llm = new TraceSpan("llm_review_deep", Instant.now());
         llm.put("promptCharacters", 100);
         llm.put("estimatedPromptTokens", 25);
-        llm.put("tokenSource", "estimated");
+        llm.put("promptTokens", 30);
+        llm.put("completionTokens", 12);
+        llm.put("totalTokens", 42);
+        llm.put("tokenSource", "provider");
         llm.put("optimizationGroup", "baseline");
         llm.put("modelName", "qwen-plus");
         llm.put("effectiveModel", "qwen-plus");
@@ -42,7 +45,10 @@ class TraceSummaryTest {
         assertEquals(1, summary.getRuleFindings());
         assertEquals(2, summary.getLlmFindings());
         assertEquals(25, summary.getEstimatedPromptTokens());
-        assertEquals("estimated", summary.getTokenSource());
+        assertEquals(30, summary.getPromptTokens());
+        assertEquals(12, summary.getCompletionTokens());
+        assertEquals(42, summary.getTotalTokens());
+        assertEquals("provider", summary.getTokenSource());
         assertEquals(true, summary.getCommentWritten());
         assertEquals("baseline", summary.getOptimizationGroup());
         assertEquals("qwen-plus", summary.getModelName());

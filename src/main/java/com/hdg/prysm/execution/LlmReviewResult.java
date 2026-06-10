@@ -12,8 +12,18 @@ public class LlmReviewResult {
     private final List<ReviewFinding> findings;
     private final String summary;
     private final String rawResponse;
+    private final LlmTokenUsage tokenUsage;
 
     public LlmReviewResult(List<ReviewFinding> findings, String summary, String rawResponse) {
+        this(findings, summary, rawResponse, null);
+    }
+
+    public LlmReviewResult(
+            List<ReviewFinding> findings,
+            String summary,
+            String rawResponse,
+            LlmTokenUsage tokenUsage
+    ) {
         if (findings == null) {
             throw new IllegalArgumentException("LLM findings must not be null");
         }
@@ -24,6 +34,7 @@ public class LlmReviewResult {
         this.findings = Collections.unmodifiableList(new ArrayList<>(findings));
         this.summary = summary;
         this.rawResponse = rawResponse;
+        this.tokenUsage = tokenUsage;
     }
 
     public List<ReviewFinding> getFindings() {
@@ -36,6 +47,14 @@ public class LlmReviewResult {
 
     public String getRawResponse() {
         return rawResponse;
+    }
+
+    public LlmTokenUsage getTokenUsage() {
+        return tokenUsage;
+    }
+
+    public LlmReviewResult withTokenUsage(LlmTokenUsage tokenUsage) {
+        return new LlmReviewResult(findings, summary, rawResponse, tokenUsage);
     }
 
     public boolean hasFindings() {

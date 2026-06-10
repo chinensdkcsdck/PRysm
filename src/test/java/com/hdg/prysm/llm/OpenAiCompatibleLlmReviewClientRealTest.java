@@ -33,7 +33,7 @@ class OpenAiCompatibleLlmReviewClientRealTest {
                 60
         );
 
-        String rawResponse = client.review(new PromptPayload(
+        LlmReviewClientResponse response = client.review(new PromptPayload(
                 "You are a strict code review assistant. Return only a JSON object matching the schema.",
                 """
                 Review this tiny pull request diff.
@@ -80,7 +80,7 @@ class OpenAiCompatibleLlmReviewClientRealTest {
                 """
         ));
 
-        LlmReviewResult result = new LlmReviewResponseParser(objectMapper).parse(rawResponse);
+        LlmReviewResult result = new LlmReviewResponseParser(objectMapper).parse(response.getContent());
 
         assertNotNull(result.getSummary());
         assertNotNull(result.getRawResponse());

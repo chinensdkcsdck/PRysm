@@ -10,6 +10,7 @@ import com.hdg.prysm.diff.PrDiffProvider;
 import com.hdg.prysm.enrichment.ReviewContextEnrichmentService;
 import com.hdg.prysm.comment.ReviewCommentRenderer;
 import com.hdg.prysm.execution.LlmReviewResult;
+import com.hdg.prysm.execution.LlmTokenUsage;
 import com.hdg.prysm.execution.ReviewExecutionInput;
 import com.hdg.prysm.execution.RuleEngineResult;
 import com.hdg.prysm.github.GithubPullRequestCommentClient;
@@ -335,10 +336,8 @@ public class PrReviewRunner implements ApplicationRunner {
                 .put("promptCharactersSaved", optimizationContext.getPromptCharactersSaved())
                 .put("promptCompactRatio", optimizationContext.getPromptCompactRatio())
                 .put("promptCharacters", llmPromptCharacters)
-                .put("estimatedPromptTokens", estimateTokens(llmPromptCharacters))
-                .put("tokenSource", "estimated")
-                .put("completionTokens", "unavailable")
-                .put("cost", "unavailable");
+                .put("estimatedPromptTokens", estimateTokens(llmPromptCharacters));
+        putTokenUsage(llmSpan, llmResult);
         if (isSkippedLlmResult(llmResult)) {
             llmSpan.finish(TraceStatus.SKIPPED, llmSpan.getEndedAt());
         } else if (isDegradedSummary(llmResult.getSummary())) {
@@ -441,8 +440,8 @@ public class PrReviewRunner implements ApplicationRunner {
                 .put("effectiveModel", fastModel)
                 .put("optimizationGroup", "fast_comment")
                 .put("promptCharacters", promptCharacters)
-                .put("estimatedPromptTokens", estimateTokens(promptCharacters))
-                .put("tokenSource", "estimated");
+                .put("estimatedPromptTokens", estimateTokens(promptCharacters));
+        putTokenUsage(fastLlmSpan, fastLlmResult);
         log.info(
                 "Fast LLM review completed: findings={}, summary={}",
                 fastLlmResult.getFindings().size(),
@@ -497,6 +496,20 @@ public class PrReviewRunner implements ApplicationRunner {
 
     private static int estimateTokens(int characters) {
         return Math.max(0, (int) Math.ceil(characters / 4.0));
+    }
+
+    private static void putTokenUsage(TraceSpan span, LlmReviewResult result) {
+        LlmTokenUsage usage = result.getTokenUsage();
+        if (usage == null) {
+            span.put("tokenSource", "estimated");
+            return;
+        }
+
+        span
+                .put("tokenSource", "provider")
+                .put("promptTokens", usage.getPromptTokens())
+                .put("completionTokens", usage.getCompletionTokens())
+                .put("totalTokens", usage.getTotalTokens());
     }
 
     private static boolean isSkippedLlmResult(LlmReviewResult result) {

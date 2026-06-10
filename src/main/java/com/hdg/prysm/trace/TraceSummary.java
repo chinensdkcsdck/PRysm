@@ -18,6 +18,9 @@ public class TraceSummary {
     private final Integer duplicatesRemoved;
     private final Integer promptCharacters;
     private final Integer estimatedPromptTokens;
+    private final Integer promptTokens;
+    private final Integer completionTokens;
+    private final Integer totalTokens;
     private final String tokenSource;
     private final Boolean commentWritten;
     private final String optimizationGroup;
@@ -38,9 +41,12 @@ public class TraceSummary {
         this.ruleFindings = readLastInt(context, "result_aggregate", "ruleFindings");
         this.llmFindings = readLastInt(context, "result_aggregate", "llmFindings");
         this.duplicatesRemoved = readLastInt(context, "result_aggregate", "duplicatesRemoved");
-        this.promptCharacters = readLastInt(context, "llm_review_deep", "promptCharacters");
-        this.estimatedPromptTokens = readLastInt(context, "llm_review_deep", "estimatedPromptTokens");
-        this.tokenSource = readLastString(context, "llm_review_deep", "tokenSource");
+        this.promptCharacters = readLastLlmInt(context, "promptCharacters");
+        this.estimatedPromptTokens = readLastLlmInt(context, "estimatedPromptTokens");
+        this.promptTokens = readLastLlmInt(context, "promptTokens");
+        this.completionTokens = readLastLlmInt(context, "completionTokens");
+        this.totalTokens = readLastLlmInt(context, "totalTokens");
+        this.tokenSource = readLastLlmString(context, "tokenSource");
         Boolean commentWrittenValue = readLastBoolean(context, "github_comment", "commentWritten");
         if (commentWrittenValue == null) {
             commentWrittenValue = readLastBoolean(context, "github_comment_update", "commentWritten");
@@ -49,9 +55,9 @@ public class TraceSummary {
             commentWrittenValue = readLastBoolean(context, "github_comment_fast", "commentWritten");
         }
         this.commentWritten = commentWrittenValue;
-        this.optimizationGroup = readLastString(context, "llm_review_deep", "optimizationGroup");
-        this.modelName = readLastString(context, "llm_review_deep", "modelName");
-        this.effectiveModel = readLastString(context, "llm_review_deep", "effectiveModel");
+        this.optimizationGroup = readLastLlmString(context, "optimizationGroup");
+        this.modelName = readLastLlmString(context, "modelName");
+        this.effectiveModel = readLastLlmString(context, "effectiveModel");
     }
 
     public String getTraceId() {
@@ -96,6 +102,18 @@ public class TraceSummary {
 
     public Integer getEstimatedPromptTokens() {
         return estimatedPromptTokens;
+    }
+
+    public Integer getPromptTokens() {
+        return promptTokens;
+    }
+
+    public Integer getCompletionTokens() {
+        return completionTokens;
+    }
+
+    public Integer getTotalTokens() {
+        return totalTokens;
     }
 
     public String getTokenSource() {
@@ -144,9 +162,25 @@ public class TraceSummary {
         return null;
     }
 
+    private static Integer readLastLlmInt(TraceContext context, String key) {
+        Integer value = readLastInt(context, "llm_review_deep", key);
+        if (value != null) {
+            return value;
+        }
+        return readLastInt(context, "llm_review_fast", key);
+    }
+
     private static String readLastString(TraceContext context, String spanName, String key) {
         Object value = readLastAttribute(context, spanName, key);
         return value == null ? null : String.valueOf(value);
+    }
+
+    private static String readLastLlmString(TraceContext context, String key) {
+        String value = readLastString(context, "llm_review_deep", key);
+        if (value != null) {
+            return value;
+        }
+        return readLastString(context, "llm_review_fast", key);
     }
 
     private static Boolean readLastBoolean(TraceContext context, String spanName, String key) {
