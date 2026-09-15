@@ -9,10 +9,37 @@ PRysm 是一个基于 GitHub Pull Request 的 AI 代码评审助手。它通过 
 - 自动读取 GitHub PR 上下文、变更文件和 patch。
 - 为变更代码提取邻近代码片段，补充 PR 标题、正文和 commit message。
 - 按文件类型、优先级和上下文预算筛选进入模型的内容。
-- 使用内置规则识别确定性风险，例如合并冲突标记和调试输出。
+- 使用 20 条内置规则识别凭据泄露、Java 正确性与安全风险、危险配置和工作流权限问题。
 - 调用 OpenAI 兼容接口生成变更总结、风险说明和 Review 建议。
 - 先输出快速审查评论，再用深度审查结果更新同一条评论。
 - 支持跨仓库复用 workflow，接入仓库只需要配置一个 workflow 和一个模型密钥。
+
+## 内置静态规则
+
+内置规则只检查本次 PR 的新增行，避免把历史问题反复上报；合并冲突标记还会额外检查变更点附近代码。每个命中结果都包含风险等级、问题分类、文件行号和修改建议。
+
+| 类别 | 规则 | 风险等级 |
+| --- | --- | --- |
+| 正确性 | 合并冲突标记 | HIGH |
+| 正确性 | 空的异常处理 | HIGH |
+| 正确性 | Java 字符串使用 `==` 或 `!=` 比较 | MEDIUM |
+| 正确性 | 使用浮点数创建 `BigDecimal` | MEDIUM |
+| 凭据安全 | 私钥内容 | CRITICAL |
+| 凭据安全 | AWS 访问密钥 | CRITICAL |
+| 凭据安全 | GitHub 访问令牌 | CRITICAL |
+| 凭据安全 | Slack 令牌或 Webhook | CRITICAL |
+| 凭据安全 | URL 中包含明文账号密码 | HIGH |
+| Java 安全 | 直接执行系统命令 | HIGH |
+| Java 安全 | SQL 字符串拼接 | HIGH |
+| Java 安全 | MD5 弱哈希 | HIGH |
+| Java 安全 | SHA-1 弱哈希 | HIGH |
+| Java 安全 | ECB 加密模式 | HIGH |
+| Java 安全 | 跨域来源全部放开 | HIGH |
+| Java 安全 | 关闭 CSRF 防护 | HIGH |
+| 可维护性 | 直接写标准输出或标准错误 | LOW |
+| 可维护性 | 直接打印异常栈 | MEDIUM |
+| 工作流安全 | 令牌使用 `write-all` 权限 | CRITICAL |
+| 工作流安全 | Action 引用 `main`、`master` 或 `latest` | HIGH |
 
 ## 效果展示
 
@@ -288,7 +315,7 @@ workflow、README 和代码都会进入仓库历史，公开仓库里写入 API 
 
 - 当前主要支持 GitHub Pull Request，后续可扩展 GitLab、Gitee 等平台。
 - 当前以 PR 总评论为主，后续可扩展到具体代码行的 review comment。
-- 当前内置规则覆盖合并冲突标记、调试输出等确定性问题，后续可扩展安全规则、测试覆盖规则和项目自定义规则。
+- 当前内置 20 条高置信规则，后续可继续接入测试覆盖规则、项目自定义规则和成熟静态分析工具。
 - 当前通过 GitHub Actions secret 配置模型密钥，后续可演进为 GitHub App 模式，降低单仓库接入成本并提供更细的权限控制。
 - 大 diff 会进行上下文预算控制，可能跳过部分低优先级文件；后续可加入分批审查和增量缓存。
 
@@ -304,4 +331,4 @@ workflow、README 和代码都会进入仓库历史，公开仓库里写入 API 
 
 ## 项目状态
 
-当前版本已经具备 GitHub PR 自动审查、PR 评论回写、跨仓库 workflow 复用、release jar 运行、规则与 LLM 联合审查等核心能力。后续主要完善方向是更多规则覆盖、行级评论和 GitHub App 化。
+当前版本已经具备 GitHub PR 自动审查、PR 评论回写、跨仓库 workflow 复用、release jar 运行、20 条静态规则与 LLM 联合审查等核心能力。后续主要完善方向是项目自定义规则、行级评论和 GitHub App 化。
