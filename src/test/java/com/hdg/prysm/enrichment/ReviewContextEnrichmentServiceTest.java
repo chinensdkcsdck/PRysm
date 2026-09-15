@@ -54,6 +54,31 @@ class ReviewContextEnrichmentServiceTest {
         assertTrue(userPrompt.contains("基础 prompt"));
     }
 
+    @Test
+    void shouldInjectBoundedCrossFileContextIntoPrompt() {
+        ReviewContextEnrichmentService service = new ReviewContextEnrichmentService(
+                context -> new PullRequestMetadata("Title", "Body", List.of(), null),
+                input -> new CrossFileContext(
+                        "跨文件依赖上下文\n依赖片段 1 [定义] src/Dependency.java\n",
+                        1,
+                        1,
+                        false
+                ),
+                1,
+                1
+        );
+
+        ReviewExecutionInput enrichedInput = service.enrich(newInput(
+                ContextStatusCode.FULL,
+                "ready",
+                List.of(newTargetFile(true)),
+                "基础 prompt"
+        ));
+
+        assertTrue(enrichedInput.getPromptPayload().getUserPrompt().contains("跨文件依赖上下文"));
+        assertTrue(enrichedInput.getPromptPayload().getUserPrompt().contains("src/Dependency.java"));
+    }
+
     /**
      * 基础输入已被标记为 SKIPPED 时，应保留 SKIPPED 状态。
      */

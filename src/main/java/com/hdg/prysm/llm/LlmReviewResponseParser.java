@@ -93,7 +93,8 @@ public class LlmReviewResponseParser {
                 readNullableText(node, "suggestion"),
                 defaultRuleId(readNullableText(node, "ruleId")),
                 readNullableText(node, "confidence"),
-                readNullableText(node, "category")
+                readNullableText(node, "category"),
+                readNullableText(node, "codeSnippet")
         );
     }
 

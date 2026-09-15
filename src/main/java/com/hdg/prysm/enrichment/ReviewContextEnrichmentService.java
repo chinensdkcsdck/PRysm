@@ -20,6 +20,7 @@ import java.util.List;
 public class ReviewContextEnrichmentService {
 
     private final PullRequestMetadataProvider metadataProvider;
+    private final CrossFileContextProvider crossFileContextProvider;
     private final int minReviewableFiles;
     private final int minPromptCharacters;
 
@@ -29,11 +30,15 @@ public class ReviewContextEnrichmentService {
     @Autowired
     public ReviewContextEnrichmentService(
             PullRequestMetadataProvider metadataProvider,
+            CrossFileContextProvider crossFileContextProvider,
             @Value("${prysm.review.gate.min-reviewable-files:1}") int minReviewableFiles,
             @Value("${prysm.review.gate.min-prompt-chars:200}") int minPromptCharacters
     ) {
         if (metadataProvider == null) {
             throw new IllegalArgumentException("Pull request metadata provider must not be null");
+        }
+        if (crossFileContextProvider == null) {
+            throw new IllegalArgumentException("Cross-file context provider must not be null");
         }
         if (minReviewableFiles < 0) {
             throw new IllegalArgumentException("Minimum reviewable files must not be negative");
@@ -43,8 +48,20 @@ public class ReviewContextEnrichmentService {
         }
 
         this.metadataProvider = metadataProvider;
+        this.crossFileContextProvider = crossFileContextProvider;
         this.minReviewableFiles = minReviewableFiles;
         this.minPromptCharacters = minPromptCharacters;
+    }
+
+    /**
+     * Keeps focused unit tests and embedders source-compatible when cross-file lookup is not needed.
+     */
+    public ReviewContextEnrichmentService(
+            PullRequestMetadataProvider metadataProvider,
+            int minReviewableFiles,
+            int minPromptCharacters
+    ) {
+        this(metadataProvider, input -> CrossFileContext.empty(), minReviewableFiles, minPromptCharacters);
     }
 
     /**
@@ -59,8 +76,9 @@ public class ReviewContextEnrichmentService {
         }
 
         PullRequestMetadata metadata = pullRequestMetadata(input);
-        PromptPayload promptPayload = enrichPromptPayload(input.getPromptPayload(), metadata);
-        ContextStatus contextStatus = contextStatus(input, metadata, promptPayload);
+        CrossFileContext crossFileContext = crossFileContext(input);
+        PromptPayload promptPayload = enrichPromptPayload(input.getPromptPayload(), metadata, crossFileContext);
+        ContextStatus contextStatus = contextStatus(input, metadata, crossFileContext, promptPayload);
         return new ReviewExecutionInput(
                 input.getPrContext(),
                 input.getDiff(),
@@ -68,6 +86,22 @@ public class ReviewContextEnrichmentService {
                 contextStatus,
                 promptPayload
         );
+    }
+
+    /**
+     * Builds bounded dependency context; an indexing failure degrades the prompt instead of failing the review.
+     */
+    private CrossFileContext crossFileContext(ReviewExecutionInput input) {
+        try {
+            return crossFileContextProvider.build(input);
+        } catch (RuntimeException exception) {
+            return new CrossFileContext(
+                    "跨文件依赖上下文\n- 说明: 轻量索引构建失败，继续使用 PR 元数据、Diff 和邻近代码。\n",
+                    0,
+                    0,
+                    true
+            );
+        }
     }
 
     /**
@@ -89,10 +123,17 @@ public class ReviewContextEnrichmentService {
     /**
      * 将 PR title/body/commit message 注入 user prompt。
      */
-    private PromptPayload enrichPromptPayload(PromptPayload promptPayload, PullRequestMetadata metadata) {
+    private PromptPayload enrichPromptPayload(
+            PromptPayload promptPayload,
+            PullRequestMetadata metadata,
+            CrossFileContext crossFileContext
+    ) {
+        String crossFilePrompt = crossFileContext.hasContent()
+                ? "\n" + crossFileContext.promptFragment()
+                : "";
         return new PromptPayload(
                 promptPayload.getSystemPrompt(),
-                extendedContext(metadata) + "\n" + promptPayload.getUserPrompt(),
+                extendedContext(metadata) + crossFilePrompt + "\n" + promptPayload.getUserPrompt(),
                 promptPayload.getOutputSchema()
         );
     }
@@ -153,6 +194,7 @@ public class ReviewContextEnrichmentService {
     private ContextStatus contextStatus(
             ReviewExecutionInput input,
             PullRequestMetadata metadata,
+            CrossFileContext crossFileContext,
             PromptPayload promptPayload
     ) {
         if (reviewableFiles(input) < minReviewableFiles) {
@@ -161,8 +203,10 @@ public class ReviewContextEnrichmentService {
         if (promptPayload.getUserPrompt().length() < minPromptCharacters) {
             return new ContextStatus(ContextStatusCode.INSUFFICIENT, "Review prompt 上下文过少");
         }
-        if (!metadata.hasAnyContext() || input.getContextStatus().getCode() == ContextStatusCode.LIMITED) {
-            return new ContextStatus(ContextStatusCode.LIMITED, limitedReason(input, metadata));
+        if (!metadata.hasAnyContext()
+                || crossFileContext.truncated()
+                || input.getContextStatus().getCode() == ContextStatusCode.LIMITED) {
+            return new ContextStatus(ContextStatusCode.LIMITED, limitedReason(input, metadata, crossFileContext));
         }
         return new ContextStatus(ContextStatusCode.FULL, "扩展上下文已注入，Review 上下文充足");
     }
@@ -179,9 +223,16 @@ public class ReviewContextEnrichmentService {
     /**
      * 生成 LIMITED 状态说明。
      */
-    private String limitedReason(ReviewExecutionInput input, PullRequestMetadata metadata) {
+    private String limitedReason(
+            ReviewExecutionInput input,
+            PullRequestMetadata metadata,
+            CrossFileContext crossFileContext
+    ) {
         if (!metadata.hasAnyContext()) {
             return "未获取到 PR 扩展上下文，使用 patch 和 snippet 降级审查";
+        }
+        if (crossFileContext.truncated()) {
+            return "跨文件依赖上下文已被安全限制或预算裁剪";
         }
         return input.getContextStatus().getReason();
     }

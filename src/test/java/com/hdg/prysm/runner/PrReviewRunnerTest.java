@@ -18,11 +18,13 @@ import com.hdg.prysm.execution.PromptPayload;
 import com.hdg.prysm.execution.ReviewExecutionInput;
 import com.hdg.prysm.execution.RuleEngineResult;
 import com.hdg.prysm.github.GithubPullRequestCommentClient;
+import com.hdg.prysm.github.PullRequestRevisionGuard;
 import com.hdg.prysm.llm.LlmReviewRunner;
 import com.hdg.prysm.optimization.LlmOptimizationContext;
 import com.hdg.prysm.optimization.LlmOptimizationPlanner;
 import com.hdg.prysm.optimization.LlmOptimizationProperties;
 import com.hdg.prysm.quality.ReviewFindingQualityGate;
+import com.hdg.prysm.quality.ReviewFindingPositionValidator;
 import com.hdg.prysm.review.PrReviewContext;
 import com.hdg.prysm.review.PrReviewContextLoader;
 import com.hdg.prysm.result.ReviewAggregationResult;
@@ -83,6 +85,8 @@ class PrReviewRunnerTest {
                 commentRenderer,
                 commentClient,
                 new ReviewFindingQualityGate(),
+                new ReviewFindingPositionValidator(),
+                ignored -> true,
                 baselineOptimizationProperties(),
                 baselineOptimizationPlanner(),
                 new LlmOptimizationContext(),
@@ -149,6 +153,8 @@ class PrReviewRunnerTest {
                 commentRenderer,
                 commentClient,
                 new ReviewFindingQualityGate(),
+                new ReviewFindingPositionValidator(),
+                ignored -> true,
                 baselineOptimizationProperties(),
                 baselineOptimizationPlanner(),
                 new LlmOptimizationContext(),
@@ -197,6 +203,7 @@ class PrReviewRunnerTest {
         ReviewResultAggregator aggregator = mock(ReviewResultAggregator.class);
         ReviewCommentRenderer commentRenderer = mock(ReviewCommentRenderer.class);
         GithubPullRequestCommentClient commentClient = mock(GithubPullRequestCommentClient.class);
+        PullRequestRevisionGuard revisionGuard = mock(PullRequestRevisionGuard.class);
         TraceRecorder traceRecorder = new TraceRecorder();
         TraceReporter traceReporter = mock(TraceReporter.class);
         PrContext context = new PrContext("chinensdkcsdck", "PRysm", 3);
@@ -247,6 +254,7 @@ class PrReviewRunnerTest {
         )).thenReturn(aggregationResult);
         when(commentRenderer.renderFastReview(aggregationResult)).thenReturn("fast review comment");
         when(commentRenderer.render(aggregationResult)).thenReturn("review comment");
+        when(revisionGuard.isCurrent(context)).thenReturn(true);
         when(commentClient.findExistingReviewComment(context)).thenReturn(OptionalLong.empty());
         when(commentClient.createComment(context, "fast review comment")).thenReturn(12345L);
         MockEnvironment environment = new MockEnvironment()
@@ -265,6 +273,8 @@ class PrReviewRunnerTest {
                 commentRenderer,
                 commentClient,
                 new ReviewFindingQualityGate(),
+                new ReviewFindingPositionValidator(),
+                revisionGuard,
                 baselineOptimizationProperties(),
                 baselineOptimizationPlanner(),
                 new LlmOptimizationContext(),
@@ -383,6 +393,8 @@ class PrReviewRunnerTest {
                 commentRenderer,
                 commentClient,
                 new ReviewFindingQualityGate(),
+                new ReviewFindingPositionValidator(),
+                ignored -> true,
                 baselineOptimizationProperties(),
                 baselineOptimizationPlanner(),
                 new LlmOptimizationContext(),
@@ -449,6 +461,46 @@ class PrReviewRunnerTest {
     }
 
     @Test
+    void shouldNotWriteFastCommentWhenPullRequestRevisionIsStale() {
+        ReviewFixture fixture = reviewFixture("fast", true);
+        when(fixture.revisionGuard.isCurrent(fixture.context)).thenReturn(false);
+
+        fixture.runner.run(new DefaultApplicationArguments());
+
+        verify(fixture.revisionGuard).isCurrent(fixture.context);
+        verify(fixture.commentClient, never()).findExistingReviewComment(fixture.context);
+        verify(fixture.commentClient, never()).createComment(
+                org.mockito.ArgumentMatchers.eq(fixture.context),
+                org.mockito.ArgumentMatchers.anyString()
+        );
+        verify(fixture.commentClient, never()).updateComment(
+                org.mockito.ArgumentMatchers.eq(fixture.context),
+                org.mockito.ArgumentMatchers.anyLong(),
+                org.mockito.ArgumentMatchers.anyString()
+        );
+    }
+
+    @Test
+    void shouldNotWriteDeepCommentWhenPullRequestRevisionIsStale() {
+        ReviewFixture fixture = reviewFixture("deep", true);
+        when(fixture.revisionGuard.isCurrent(fixture.context)).thenReturn(false);
+
+        fixture.runner.run(new DefaultApplicationArguments());
+
+        verify(fixture.revisionGuard).isCurrent(fixture.context);
+        verify(fixture.commentClient, never()).findExistingReviewComment(fixture.context);
+        verify(fixture.commentClient, never()).createComment(
+                org.mockito.ArgumentMatchers.eq(fixture.context),
+                org.mockito.ArgumentMatchers.anyString()
+        );
+        verify(fixture.commentClient, never()).updateComment(
+                org.mockito.ArgumentMatchers.eq(fixture.context),
+                org.mockito.ArgumentMatchers.anyLong(),
+                org.mockito.ArgumentMatchers.anyString()
+        );
+    }
+
+    @Test
     void shouldApplyOptimizationPlannerDecisionBeforeDeepReview() {
         LlmOptimizationContext optimizationContext = new LlmOptimizationContext();
         ReviewFixture fixture = reviewFixture(
@@ -489,6 +541,7 @@ class PrReviewRunnerTest {
         ReviewResultAggregator aggregator = mock(ReviewResultAggregator.class);
         ReviewCommentRenderer commentRenderer = mock(ReviewCommentRenderer.class);
         GithubPullRequestCommentClient commentClient = mock(GithubPullRequestCommentClient.class);
+        PullRequestRevisionGuard revisionGuard = mock(PullRequestRevisionGuard.class);
         TraceRecorder traceRecorder = new TraceRecorder();
         TraceReporter traceReporter = mock(TraceReporter.class);
         PrContext context = new PrContext("chinensdkcsdck", "PRysm", 3);
@@ -536,6 +589,7 @@ class PrReviewRunnerTest {
         )).thenReturn(aggregationResult);
         when(commentRenderer.renderFastReview(aggregationResult)).thenReturn("fast review comment");
         when(commentRenderer.render(aggregationResult)).thenReturn("review comment");
+        when(revisionGuard.isCurrent(context)).thenReturn(true);
         MockEnvironment environment = new MockEnvironment()
                 .withProperty("GITHUB_ACTIONS", "true");
         PrReviewRunner runner = new PrReviewRunner(
@@ -552,6 +606,8 @@ class PrReviewRunnerTest {
                 commentRenderer,
                 commentClient,
                 new ReviewFindingQualityGate(),
+                new ReviewFindingPositionValidator(),
+                revisionGuard,
                 baselineOptimizationProperties(),
                 baselineOptimizationPlanner(),
                 new LlmOptimizationContext(),
@@ -618,6 +674,8 @@ class PrReviewRunnerTest {
                 commentRenderer,
                 commentClient,
                 new ReviewFindingQualityGate(),
+                new ReviewFindingPositionValidator(),
+                ignored -> true,
                 baselineOptimizationProperties(),
                 baselineOptimizationPlanner(),
                 new LlmOptimizationContext(),
@@ -698,6 +756,7 @@ class PrReviewRunnerTest {
         ReviewResultAggregator aggregator = mock(ReviewResultAggregator.class);
         ReviewCommentRenderer commentRenderer = mock(ReviewCommentRenderer.class);
         GithubPullRequestCommentClient commentClient = mock(GithubPullRequestCommentClient.class);
+        PullRequestRevisionGuard revisionGuard = mock(PullRequestRevisionGuard.class);
         TraceRecorder traceRecorder = new TraceRecorder();
         TraceReporter traceReporter = mock(TraceReporter.class);
 
@@ -750,6 +809,7 @@ class PrReviewRunnerTest {
         )).thenReturn(aggregationResult);
         when(commentRenderer.renderFastReview(aggregationResult)).thenReturn("fast review comment");
         when(commentRenderer.render(aggregationResult)).thenReturn("review comment");
+        when(revisionGuard.isCurrent(context)).thenReturn(true);
 
         MockEnvironment environment = new MockEnvironment()
                 .withProperty("GITHUB_ACTIONS", "true");
@@ -767,6 +827,8 @@ class PrReviewRunnerTest {
                 commentRenderer,
                 commentClient,
                 new ReviewFindingQualityGate(),
+                new ReviewFindingPositionValidator(),
+                revisionGuard,
                 optimizationProperties,
                 new LlmOptimizationPlanner(optimizationProperties, "test-model"),
                 optimizationContext,
@@ -785,6 +847,7 @@ class PrReviewRunnerTest {
                 aggregator,
                 commentRenderer,
                 commentClient,
+                revisionGuard,
                 context,
                 enrichedInput,
                 ruleResult,
@@ -798,6 +861,7 @@ class PrReviewRunnerTest {
             ReviewResultAggregator aggregator,
             ReviewCommentRenderer commentRenderer,
             GithubPullRequestCommentClient commentClient,
+            PullRequestRevisionGuard revisionGuard,
             PrContext context,
             ReviewExecutionInput enrichedInput,
             RuleEngineResult ruleResult,

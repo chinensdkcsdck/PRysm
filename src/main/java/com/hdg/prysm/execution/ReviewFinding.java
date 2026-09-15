@@ -19,6 +19,7 @@ public class ReviewFinding {
     private final String ruleId;
     private final String confidence;
     private final String category;
+    private final String codeSnippet;
 
     public ReviewFinding(
             String source,
@@ -48,6 +49,7 @@ public class ReviewFinding {
                 suggestion,
                 ruleId,
                 null,
+                null,
                 null
         );
     }
@@ -67,6 +69,42 @@ public class ReviewFinding {
             String ruleId,
             String confidence,
             String category
+    ) {
+        this(
+                source,
+                severity,
+                filePath,
+                startLine,
+                endLine,
+                side,
+                line,
+                startSide,
+                title,
+                message,
+                suggestion,
+                ruleId,
+                confidence,
+                category,
+                null
+        );
+    }
+
+    public ReviewFinding(
+            String source,
+            String severity,
+            String filePath,
+            Integer startLine,
+            Integer endLine,
+            String side,
+            Integer line,
+            String startSide,
+            String title,
+            String message,
+            String suggestion,
+            String ruleId,
+            String confidence,
+            String category,
+            String codeSnippet
     ) {
         if (source == null || source.isBlank()) {
             throw new IllegalArgumentException("Finding source must not be blank");
@@ -101,6 +139,7 @@ public class ReviewFinding {
         this.ruleId = ruleId;
         this.confidence = normalizeOptional(confidence);
         this.category = normalizeOptional(category);
+        this.codeSnippet = normalizeOptional(codeSnippet);
     }
 
     public String getSource() {
@@ -157,6 +196,36 @@ public class ReviewFinding {
 
     public String getCategory() {
         return category;
+    }
+
+    /**
+     * Returns the exact target-side code line supplied by the model for deterministic relocation.
+     */
+    public String getCodeSnippet() {
+        return codeSnippet;
+    }
+
+    /**
+     * Copies this finding with a normalized target-side location.
+     */
+    public ReviewFinding withLocation(String normalizedFilePath, Integer normalizedLine) {
+        return new ReviewFinding(
+                source,
+                severity,
+                normalizedFilePath,
+                normalizedLine,
+                normalizedLine,
+                normalizedLine == null ? null : "RIGHT",
+                normalizedLine,
+                normalizedLine == null ? null : "RIGHT",
+                title,
+                message,
+                suggestion,
+                ruleId,
+                confidence,
+                category,
+                codeSnippet
+        );
     }
 
     private static void validateLine(String fieldName, Integer line) {

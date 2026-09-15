@@ -14,6 +14,8 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 
 class PrContextResolverTest {
 
+    private static final String HEAD_REVISION = "0123456789abcdef0123456789abcdef01234567";
+
     @TempDir
     Path tempDir;
 
@@ -33,6 +35,7 @@ class PrContextResolverTest {
         assertEquals("chinensdkcsdck", context.getOwner());
         assertEquals("PRysm", context.getRepository());
         assertEquals(7, context.getPullRequestNumber());
+        assertEquals(HEAD_REVISION, context.getTargetRevision());
         assertEquals("chinensdkcsdck/PRysm", context.fullRepositoryName());
     }
 
@@ -131,17 +134,20 @@ class PrContextResolverTest {
     }
 
     /**
-     * 写入只包含 PR 编号的最小 GitHub pull_request 事件文件。
+     * 写入包含 PR 编号和目标提交的最小 GitHub pull_request 事件文件。
      */
     private Path writePullRequestEvent(int pullRequestNumber) throws IOException {
         Path eventFile = tempDir.resolve("event.json");
         Files.writeString(eventFile, """
                 {
                   "pull_request": {
-                    "number": %d
+                    "number": %d,
+                    "head": {
+                      "sha": "%s"
+                    }
                   }
                 }
-                """.formatted(pullRequestNumber));
+                """.formatted(pullRequestNumber, HEAD_REVISION));
         return eventFile;
     }
 }

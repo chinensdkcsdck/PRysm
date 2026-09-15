@@ -34,6 +34,7 @@ public class ReviewExecutionInputAssembler {
             优先关注正确性、安全性、可维护性、可靠性和测试影响。
             summary 必须概括本次 PR 的主要变更，作为最终评论中的“变更总结”。
             title、message、suggestion 必须分别说明风险标题、风险原因和可执行 Review 建议。
+            每个 finding 的 codeSnippet 必须复制问题对应的新文件侧单行代码，供系统校验和重新定位；无法提供证据时不要编造。
             除文件路径、代码标识符、API 名称、错误码和枚举值外，summary、title、message、suggestion 等面向用户的文本必须使用简体中文。
             只返回符合输出 schema 的 JSON，不要输出 Markdown 或额外解释。
             """;
@@ -56,14 +57,15 @@ public class ReviewExecutionInputAssembler {
                   "suggestion": "使用简体中文给出具体、可执行的 Review 建议。",
                   "ruleId": "LLM_RULE_ID",
                   "confidence": "HIGH|MEDIUM|LOW",
-                  "category": "bug|security|secret|workflow|config|test|maintainability|documentation"
+                  "category": "bug|security|secret|workflow|config|test|maintainability|documentation",
+                  "codeSnippet": "问题对应的新文件侧单行代码"
                 }
               ]
             }
             """;
 
     private static final String COMPACT_OUTPUT_SCHEMA = """
-            {"summary":"简体中文 PR 变更总结","findings":[{"severity":"error|warning|info","filePath":"string","startLine":1,"endLine":1,"line":1,"title":"简体中文风险标题","message":"简体中文风险原因","suggestion":"简体中文可执行 Review 建议","ruleId":"LLM_RULE_ID","confidence":"HIGH|MEDIUM|LOW","category":"bug|security|secret|workflow|config|test|maintainability|documentation"}]}
+            {"summary":"简体中文 PR 变更总结","findings":[{"severity":"error|warning|info","filePath":"string","startLine":1,"endLine":1,"line":1,"title":"简体中文风险标题","message":"简体中文风险原因","suggestion":"简体中文可执行 Review 建议","ruleId":"LLM_RULE_ID","confidence":"HIGH|MEDIUM|LOW","category":"bug|security|secret|workflow|config|test|maintainability|documentation","codeSnippet":"新文件侧单行代码"}]}
             """;
 
     private final LlmOptimizationProperties optimizationProperties;
