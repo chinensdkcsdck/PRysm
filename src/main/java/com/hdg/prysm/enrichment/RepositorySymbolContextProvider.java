@@ -1,5 +1,14 @@
 package com.hdg.prysm.enrichment;
 
+import com.github.javaparser.JavaParser;
+import com.github.javaparser.ParserConfiguration;
+import com.github.javaparser.ast.CompilationUnit;
+import com.github.javaparser.ast.Node;
+import com.github.javaparser.ast.body.CallableDeclaration;
+import com.github.javaparser.ast.body.TypeDeclaration;
+import com.github.javaparser.ast.expr.MethodCallExpr;
+import com.github.javaparser.ast.expr.ObjectCreationExpr;
+import com.github.javaparser.ast.type.ClassOrInterfaceType;
 import com.hdg.prysm.diff.PrChangedFile;
 import com.hdg.prysm.diff.UnifiedDiffParser;
 import com.hdg.prysm.execution.ReviewExecutionInput;
@@ -15,41 +24,25 @@ import java.nio.file.LinkOption;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashSet;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 import java.util.stream.Stream;
 
 /**
- * Builds a lightweight Java symbol index and returns bounded cross-file context.
- *
- * This is deliberately not a compiler: it only follows direct definitions, callers and tests,
- * and fails closed when a repository file cannot be read safely.
+ * Builds a bounded Java AST index and follows source-level definitions, direct callers and tests.
  */
 @Component
 public class RepositorySymbolContextProvider implements CrossFileContextProvider {
 
-    private static final Pattern TYPE_DECLARATION =
-            Pattern.compile("\\b(?:class|interface|enum|record)\\s+([A-Za-z_$][A-Za-z0-9_$]*)");
-    private static final Pattern METHOD_DECLARATION = Pattern.compile(
-            "\\b(?:public|protected|private|static|final|abstract|synchronized|native|default)"
-                    + "(?:[\\w<>\\[\\],.?@ ]+)?\\s+([a-zA-Z_$][A-Za-z0-9_$]*)\\s*\\("
-    );
-    private static final Pattern METHOD_CALL =
-            Pattern.compile("\\b([a-zA-Z_$][A-Za-z0-9_$]*)\\s*\\(");
-    private static final Pattern TYPE_REFERENCE =
-            Pattern.compile("\\b([A-Z][A-Za-z0-9_$]{2,})\\b");
     private static final Set<String> IGNORED_SYMBOLS = Set.of(
             "String", "Integer", "Long", "Double", "Float", "Boolean", "Object", "Class",
             "List", "Set", "Map", "Collection", "Optional", "Stream", "Override", "SuppressWarnings",
-            "System", "Runtime", "Exception", "RuntimeException", "IllegalArgumentException",
-            "if", "for", "while", "switch", "catch", "return", "new", "super", "this"
+            "System", "Runtime", "Exception", "RuntimeException", "IllegalArgumentException"
     );
     private static final Set<String> EXCLUDED_DIRECTORIES = Set.of(
             ".git", ".idea", ".gradle", "target", "build", "dist", "node_modules", "vendor"
@@ -62,6 +55,7 @@ public class RepositorySymbolContextProvider implements CrossFileContextProvider
     private final int snippetWindowLines;
     private final int maxContextCharacters;
     private final long maxFileSizeBytes;
+    private final JavaParser javaParser;
 
     @Autowired
     public RepositorySymbolContextProvider(
@@ -73,15 +67,8 @@ public class RepositorySymbolContextProvider implements CrossFileContextProvider
             @Value("${prysm.review.cross-file.max-context-chars:12000}") int maxContextCharacters,
             @Value("${prysm.review.cross-file.max-file-size-bytes:262144}") long maxFileSizeBytes
     ) {
-        this(
-                Path.of(repositoryRoot),
-                maxIndexedFiles,
-                maxSymbols,
-                maxSnippets,
-                snippetWindowLines,
-                maxContextCharacters,
-                maxFileSizeBytes
-        );
+        this(Path.of(repositoryRoot), maxIndexedFiles, maxSymbols, maxSnippets,
+                snippetWindowLines, maxContextCharacters, maxFileSizeBytes);
     }
 
     RepositorySymbolContextProvider(
@@ -109,6 +96,8 @@ public class RepositorySymbolContextProvider implements CrossFileContextProvider
         this.snippetWindowLines = snippetWindowLines;
         this.maxContextCharacters = maxContextCharacters;
         this.maxFileSizeBytes = maxFileSizeBytes;
+        this.javaParser = new JavaParser(new ParserConfiguration()
+                .setLanguageLevel(ParserConfiguration.LanguageLevel.JAVA_21));
     }
 
     @Override
@@ -117,20 +106,19 @@ public class RepositorySymbolContextProvider implements CrossFileContextProvider
             throw new IllegalArgumentException("Review execution input must not be null");
         }
 
-        LinkedHashSet<String> symbols = changedSymbols(input);
+        List<IndexedJavaFile> files = indexJavaFiles();
+        LinkedHashSet<String> symbols = changedSymbols(input, files);
         if (symbols.isEmpty()) {
             return CrossFileContext.empty();
         }
 
-        Set<String> changedPaths = changedPaths(input);
-        List<IndexedJavaFile> files = indexJavaFiles();
-        List<RelatedLocation> locations = relatedLocations(files, symbols, changedPaths);
+        List<RelatedLocation> locations = relatedLocations(files, symbols, changedPaths(input));
         if (locations.isEmpty()) {
             return CrossFileContext.empty();
         }
 
         StringBuilder prompt = new StringBuilder("跨文件依赖上下文\n");
-        prompt.append("- 追踪范围: Java 直接定义、直接调用方和相关测试（1 层）\n");
+        prompt.append("- 追踪范围: Java AST 定义、直接调用方和相关测试（源码一层调用图）\n");
         prompt.append("- 变更涉及符号: ").append(String.join(", ", symbols)).append('\n');
 
         int appended = 0;
@@ -157,34 +145,57 @@ public class RepositorySymbolContextProvider implements CrossFileContextProvider
         return new CrossFileContext(prompt.toString(), symbols.size(), appended, truncated);
     }
 
-    private LinkedHashSet<String> changedSymbols(ReviewExecutionInput input) {
+    private LinkedHashSet<String> changedSymbols(ReviewExecutionInput input, List<IndexedJavaFile> files) {
+        Map<String, IndexedJavaFile> byPath = new HashMap<>();
+        for (IndexedJavaFile file : files) {
+            byPath.put(file.path(), file);
+        }
+
         LinkedHashSet<String> symbols = new LinkedHashSet<>();
         for (ReviewTargetFile targetFile : input.getFiles()) {
-            PrChangedFile file = targetFile.getChangedFile();
-            if (!targetFile.isSelected() || !isJavaPath(file.getFilename())) {
+            PrChangedFile changedFile = targetFile.getChangedFile();
+            if (!targetFile.isSelected() || !isJavaPath(changedFile.getFilename())) {
                 continue;
             }
-            for (UnifiedDiffParser.AddedLine line : UnifiedDiffParser.addedLines(file.getPatch())) {
-                collectMatches(TYPE_DECLARATION, line.content(), symbols);
-                collectMatches(METHOD_DECLARATION, line.content(), symbols);
-                collectMatches(TYPE_REFERENCE, line.content(), symbols);
-                collectMatches(METHOD_CALL, line.content(), symbols);
-                if (symbols.size() >= maxSymbols) {
-                    return symbols;
-                }
+            IndexedJavaFile file = byPath.get(UnifiedDiffParser.normalizePath(changedFile.getFilename()));
+            if (file == null) {
+                continue;
+            }
+            collectChangedNodes(file.unit(), UnifiedDiffParser.addedLineNumbers(changedFile.getPatch()), symbols);
+            if (symbols.size() >= maxSymbols) {
+                break;
             }
         }
         return symbols;
     }
 
-    private void collectMatches(Pattern pattern, String content, LinkedHashSet<String> symbols) {
-        Matcher matcher = pattern.matcher(content);
-        while (matcher.find() && symbols.size() < maxSymbols) {
-            String symbol = matcher.group(1);
-            if (!IGNORED_SYMBOLS.contains(symbol)) {
-                symbols.add(symbol);
-            }
+    private void collectChangedNodes(CompilationUnit unit, Set<Integer> changedLines, LinkedHashSet<String> symbols) {
+        for (TypeDeclaration<?> declaration : unit.findAll(TypeDeclaration.class)) {
+            addWhenChanged(declaration, declaration.getNameAsString(), changedLines, symbols);
         }
+        for (CallableDeclaration<?> declaration : unit.findAll(CallableDeclaration.class)) {
+            addWhenChanged(declaration, declaration.getNameAsString(), changedLines, symbols);
+        }
+        for (MethodCallExpr call : unit.findAll(MethodCallExpr.class)) {
+            addWhenChanged(call, call.getNameAsString(), changedLines, symbols);
+        }
+        for (ObjectCreationExpr creation : unit.findAll(ObjectCreationExpr.class)) {
+            addWhenChanged(creation, creation.getType().getNameAsString(), changedLines, symbols);
+        }
+        for (ClassOrInterfaceType type : unit.findAll(ClassOrInterfaceType.class)) {
+            addWhenChanged(type, type.getNameAsString(), changedLines, symbols);
+        }
+    }
+
+    private void addWhenChanged(Node node, String symbol, Set<Integer> changedLines, LinkedHashSet<String> symbols) {
+        if (symbols.size() < maxSymbols && !IGNORED_SYMBOLS.contains(symbol) && overlaps(node, changedLines)) {
+            symbols.add(symbol);
+        }
+    }
+
+    private static boolean overlaps(Node node, Set<Integer> lines) {
+        return node.getRange().map(range -> lines.stream()
+                .anyMatch(line -> line >= range.begin.line && line <= range.end.line)).orElse(false);
     }
 
     private Set<String> changedPaths(ReviewExecutionInput input) {
@@ -202,8 +213,7 @@ public class RepositorySymbolContextProvider implements CrossFileContextProvider
 
         List<Path> paths;
         try (Stream<Path> stream = Files.walk(repositoryRoot)) {
-            paths = stream
-                    .filter(path -> Files.isRegularFile(path, LinkOption.NOFOLLOW_LINKS))
+            paths = stream.filter(path -> Files.isRegularFile(path, LinkOption.NOFOLLOW_LINKS))
                     .filter(path -> !Files.isSymbolicLink(path))
                     .filter(this::isIndexableJavaFile)
                     .sorted()
@@ -216,14 +226,17 @@ public class RepositorySymbolContextProvider implements CrossFileContextProvider
         List<IndexedJavaFile> files = new ArrayList<>();
         for (Path path : paths) {
             try {
-                if (Files.size(path) <= maxFileSizeBytes) {
-                    files.add(new IndexedJavaFile(
-                            UnifiedDiffParser.normalizePath(repositoryRoot.relativize(path).toString()),
-                            Files.readAllLines(path, StandardCharsets.UTF_8)
-                    ));
+                if (Files.size(path) > maxFileSizeBytes) {
+                    continue;
                 }
+                String source = Files.readString(path, StandardCharsets.UTF_8);
+                javaParser.parse(source).getResult().ifPresent(unit -> files.add(new IndexedJavaFile(
+                        UnifiedDiffParser.normalizePath(repositoryRoot.relativize(path).toString()),
+                        source.lines().toList(),
+                        unit
+                )));
             } catch (IOException ignored) {
-                // One unreadable source file must not stop the complete review.
+                // One unreadable or unparsable source file must not stop the complete review.
             }
         }
         return files;
@@ -241,58 +254,63 @@ public class RepositorySymbolContextProvider implements CrossFileContextProvider
 
     private List<RelatedLocation> relatedLocations(
             List<IndexedJavaFile> files,
-            LinkedHashSet<String> symbols,
+            Set<String> symbols,
             Set<String> changedPaths
     ) {
         List<RelatedLocation> locations = new ArrayList<>();
         Set<String> seen = new HashSet<>();
-        Map<String, SymbolPatterns> patternsBySymbol = new LinkedHashMap<>();
-        for (String symbol : symbols) {
-            patternsBySymbol.put(symbol, SymbolPatterns.forSymbol(symbol));
-        }
         for (IndexedJavaFile file : files) {
             if (changedPaths.contains(file.path())) {
                 continue;
             }
             boolean testFile = isTestPath(file.path());
-            for (int index = 0; index < file.lines().size(); index++) {
-                String line = file.lines().get(index);
-                for (String symbol : symbols) {
-                    Relation relation = relation(line, symbol, patternsBySymbol.get(symbol), testFile);
-                    if (relation == null) {
-                        continue;
-                    }
-                    String key = file.path() + ':' + (index + 1);
-                    if (seen.add(key)) {
-                        locations.add(location(file, index, symbol, relation));
-                    }
-                    break;
-                }
+            for (TypeDeclaration<?> declaration : file.unit().findAll(TypeDeclaration.class)) {
+                addDefinition(file, declaration, declaration.getNameAsString(), symbols, testFile, locations, seen);
+            }
+            for (CallableDeclaration<?> declaration : file.unit().findAll(CallableDeclaration.class)) {
+                addDefinition(file, declaration, declaration.getNameAsString(), symbols, testFile, locations, seen);
+            }
+            for (MethodCallExpr call : file.unit().findAll(MethodCallExpr.class)) {
+                addCall(file, call, call.getNameAsString(), symbols, testFile, locations, seen);
+            }
+            for (ObjectCreationExpr creation : file.unit().findAll(ObjectCreationExpr.class)) {
+                addCall(file, creation, creation.getType().getNameAsString(), symbols, testFile, locations, seen);
             }
         }
-        locations.sort(Comparator
-                .comparingInt((RelatedLocation location) -> location.relation().priority)
+        locations.sort(Comparator.comparingInt((RelatedLocation location) -> location.relation().priority)
                 .thenComparing(RelatedLocation::path)
                 .thenComparingInt(RelatedLocation::startLine));
         return locations;
     }
 
-    private Relation relation(String line, String symbol, SymbolPatterns patterns, boolean testFile) {
-        if (!patterns.word().matcher(line).find()) {
-            return null;
+    private void addDefinition(
+            IndexedJavaFile file, Node node, String symbol, Set<String> symbols, boolean testFile,
+            List<RelatedLocation> locations, Set<String> seen
+    ) {
+        if (symbols.contains(symbol)) {
+            addLocation(file, node, symbol, testFile ? Relation.TEST : Relation.DEFINITION, locations, seen);
         }
-        if (patterns.typeDefinition().matcher(line).find()
-                || patterns.methodDefinition().matcher(line).find()) {
-            return Relation.DEFINITION;
+    }
+
+    private void addCall(
+            IndexedJavaFile file, Node node, String symbol, Set<String> symbols, boolean testFile,
+            List<RelatedLocation> locations, Set<String> seen
+    ) {
+        if (symbols.contains(symbol)) {
+            addLocation(file, node, symbol, testFile ? Relation.TEST : Relation.CALLER, locations, seen);
         }
-        if (testFile) {
-            return Relation.TEST;
-        }
-        if (patterns.call().matcher(line).find()
-                || Character.isUpperCase(symbol.charAt(0))) {
-            return Relation.CALLER;
-        }
-        return null;
+    }
+
+    private void addLocation(
+            IndexedJavaFile file, Node node, String symbol, Relation relation,
+            List<RelatedLocation> locations, Set<String> seen
+    ) {
+        node.getRange().ifPresent(range -> {
+            String key = file.path() + ':' + range.begin.line;
+            if (seen.add(key)) {
+                locations.add(location(file, range.begin.line - 1, symbol, relation));
+            }
+        });
     }
 
     private RelatedLocation location(IndexedJavaFile file, int lineIndex, String symbol, Relation relation) {
@@ -302,23 +320,14 @@ public class RepositorySymbolContextProvider implements CrossFileContextProvider
         for (int index = startIndex; index <= endIndex; index++) {
             content.append(index + 1).append(": ").append(file.lines().get(index)).append('\n');
         }
-        return new RelatedLocation(
-                file.path(),
-                startIndex + 1,
-                endIndex + 1,
-                symbol,
-                relation,
-                content.toString().stripTrailing()
-        );
+        return new RelatedLocation(file.path(), startIndex + 1, endIndex + 1,
+                symbol, relation, content.toString().stripTrailing());
     }
 
     private String renderLocation(RelatedLocation location, int index) {
-        return "依赖片段 " + index
-                + " [" + location.relation().label + "] "
+        return "依赖片段 " + index + " [" + location.relation().label + "] "
                 + location.path() + " 行 " + location.startLine() + '-' + location.endLine() + "，符号 "
-                + location.symbol() + "\n```java\n"
-                + location.content().replace("```", "'''")
-                + "\n```\n";
+                + location.symbol() + "\n```java\n" + location.content().replace("```", "'''") + "\n```\n";
     }
 
     private static boolean isJavaPath(String path) {
@@ -331,9 +340,7 @@ public class RepositorySymbolContextProvider implements CrossFileContextProvider
     }
 
     private enum Relation {
-        DEFINITION(0, "定义"),
-        CALLER(1, "直接调用方"),
-        TEST(2, "相关测试");
+        DEFINITION(0, "定义"), CALLER(1, "直接调用方"), TEST(2, "相关测试");
 
         private final int priority;
         private final String label;
@@ -344,33 +351,11 @@ public class RepositorySymbolContextProvider implements CrossFileContextProvider
         }
     }
 
-    private record IndexedJavaFile(String path, List<String> lines) {
+    private record IndexedJavaFile(String path, List<String> lines, CompilationUnit unit) {
     }
 
     private record RelatedLocation(
-            String path,
-            int startLine,
-            int endLine,
-            String symbol,
-            Relation relation,
-            String content
+            String path, int startLine, int endLine, String symbol, Relation relation, String content
     ) {
-    }
-
-    private record SymbolPatterns(
-            Pattern word,
-            Pattern typeDefinition,
-            Pattern methodDefinition,
-            Pattern call
-    ) {
-        private static SymbolPatterns forSymbol(String symbol) {
-            String quoted = Pattern.quote(symbol);
-            return new SymbolPatterns(
-                    Pattern.compile("\\b" + quoted + "\\b"),
-                    Pattern.compile("\\b(?:class|interface|enum|record)\\s+" + quoted + "\\b"),
-                    Pattern.compile("\\b" + quoted + "\\s*\\([^;]*\\)\\s*(?:throws [^{]+)?\\{"),
-                    Pattern.compile("\\b" + quoted + "\\s*\\(")
-            );
-        }
     }
 }

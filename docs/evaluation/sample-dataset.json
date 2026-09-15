@@ -1,0 +1,15 @@
+{
+  "cases": [
+    {
+      "id": "format-example-pr-1",
+      "expected": [
+        {"issueKey": "null-check", "filePath": "src/App.java", "line": 12, "category": "bug"}
+      ],
+      "predicted": [
+        {"issueKey": "null-check", "filePath": "src/App.java", "line": 12, "category": "bug"}
+      ],
+      "promptTokens": 500,
+      "completionTokens": 120
+    }
+  ]
+}

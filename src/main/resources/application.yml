@@ -46,3 +46,6 @@ prysm:
       enabled: ${PRYSM_OPT_COMPACT_PROMPT_ENABLED:true}
   comment:
     enabled: true
+  evaluation:
+    enabled: false
+    line-tolerance: 2
