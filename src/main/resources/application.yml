@@ -13,6 +13,13 @@ prysm:
     max-file-context-chars: 8000
     max-total-context-chars: 40000
     max-file-size-bytes: 1048576
+    cross-file:
+      max-indexed-files: 1000
+      max-symbols: 20
+      max-snippets: 8
+      window-lines: 4
+      max-context-chars: 12000
+      max-file-size-bytes: 262144
     enrichment:
       max-body-chars: 4000
       max-commits: 5

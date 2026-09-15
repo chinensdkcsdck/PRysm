@@ -12,11 +12,17 @@ class PrContextTest {
      */
     @Test
     void shouldCreatePrContextWithValidValues() {
-        PrContext context = new PrContext("chinensdkcsdck", "PRysm", 3);
+        PrContext context = new PrContext(
+                "chinensdkcsdck",
+                "PRysm",
+                3,
+                "0123456789abcdef0123456789abcdef01234567"
+        );
 
         assertEquals("chinensdkcsdck", context.getOwner());
         assertEquals("PRysm", context.getRepository());
         assertEquals(3, context.getPullRequestNumber());
+        assertEquals("0123456789abcdef0123456789abcdef01234567", context.getTargetRevision());
         assertEquals("chinensdkcsdck/PRysm", context.fullRepositoryName());
     }
 

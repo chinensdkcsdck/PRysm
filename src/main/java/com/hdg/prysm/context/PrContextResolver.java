@@ -39,9 +39,9 @@ public class PrContextResolver {
         String eventPathValue = requireEnvironment(GITHUB_EVENT_PATH);
 
         String[] repositoryParts = parseRepository(repositoryValue);
-        int pullRequestNumber = readPullRequestNumber(Path.of(eventPathValue));
+        PullRequestEvent event = readPullRequestEvent(Path.of(eventPathValue));
 
-        return new PrContext(repositoryParts[0], repositoryParts[1], pullRequestNumber);
+        return new PrContext(repositoryParts[0], repositoryParts[1], event.number(), event.headRevision());
     }
 
     /**
@@ -71,7 +71,7 @@ public class PrContextResolver {
     /**
      * 从 GitHub 事件文件中读取 PR 编号。
      */
-    private int readPullRequestNumber(Path eventPath) {
+    private PullRequestEvent readPullRequestEvent(Path eventPath) {
         if (!Files.isRegularFile(eventPath)) {
             throw new IllegalStateException("GitHub event file does not exist: " + eventPath);
         }
@@ -87,6 +87,13 @@ public class PrContextResolver {
         if (!numberNode.canConvertToInt() || numberNode.asInt() <= 0) {
             throw new IllegalStateException("GitHub event file does not contain a valid pull_request.number");
         }
-        return numberNode.asInt();
+        JsonNode revisionNode = root.path("pull_request").path("head").path("sha");
+        if (!revisionNode.isTextual() || revisionNode.asText().isBlank()) {
+            throw new IllegalStateException("GitHub event file does not contain pull_request.head.sha");
+        }
+        return new PullRequestEvent(numberNode.asInt(), revisionNode.asText());
+    }
+
+    private record PullRequestEvent(int number, String headRevision) {
     }
 }

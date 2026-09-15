@@ -97,8 +97,7 @@ public class ReviewFindingQualityGate {
 
     private boolean hasLocation(ReviewFinding finding) {
         return finding.getFilePath() != null
-                && !finding.getFilePath().isBlank()
-                && (finding.getLine() != null || finding.getStartLine() != null || finding.getEndLine() != null);
+                && !finding.getFilePath().isBlank();
     }
 
     private boolean isDocumentationNoise(ReviewExecutionInput input, ReviewFinding finding) {

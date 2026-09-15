@@ -14,12 +14,14 @@ import com.hdg.prysm.execution.LlmTokenUsage;
 import com.hdg.prysm.execution.ReviewExecutionInput;
 import com.hdg.prysm.execution.RuleEngineResult;
 import com.hdg.prysm.github.GithubPullRequestCommentClient;
+import com.hdg.prysm.github.PullRequestRevisionGuard;
 import com.hdg.prysm.llm.LlmReviewRunner;
 import com.hdg.prysm.optimization.LlmOptimizationContext;
 import com.hdg.prysm.optimization.LlmOptimizationDecision;
 import com.hdg.prysm.optimization.LlmOptimizationPlanner;
 import com.hdg.prysm.optimization.LlmOptimizationProperties;
 import com.hdg.prysm.quality.ReviewFindingQualityGate;
+import com.hdg.prysm.quality.ReviewFindingPositionValidator;
 import com.hdg.prysm.review.PrReviewContext;
 import com.hdg.prysm.review.PrReviewContextLoader;
 import com.hdg.prysm.result.ReviewAggregationResult;
@@ -65,6 +67,8 @@ public class PrReviewRunner implements ApplicationRunner {
     private final ReviewCommentRenderer reviewCommentRenderer;
     private final GithubPullRequestCommentClient githubPullRequestCommentClient;
     private final ReviewFindingQualityGate reviewFindingQualityGate;
+    private final ReviewFindingPositionValidator reviewFindingPositionValidator;
+    private final PullRequestRevisionGuard pullRequestRevisionGuard;
     private final LlmOptimizationProperties optimizationProperties;
     private final LlmOptimizationPlanner optimizationPlanner;
     private final LlmOptimizationContext optimizationContext;
@@ -94,6 +98,8 @@ public class PrReviewRunner implements ApplicationRunner {
             ReviewCommentRenderer reviewCommentRenderer,
             GithubPullRequestCommentClient githubPullRequestCommentClient,
             ReviewFindingQualityGate reviewFindingQualityGate,
+            ReviewFindingPositionValidator reviewFindingPositionValidator,
+            PullRequestRevisionGuard pullRequestRevisionGuard,
             LlmOptimizationProperties optimizationProperties,
             LlmOptimizationPlanner optimizationPlanner,
             LlmOptimizationContext optimizationContext,
@@ -119,6 +125,8 @@ public class PrReviewRunner implements ApplicationRunner {
         this.reviewCommentRenderer = reviewCommentRenderer;
         this.githubPullRequestCommentClient = githubPullRequestCommentClient;
         this.reviewFindingQualityGate = reviewFindingQualityGate;
+        this.reviewFindingPositionValidator = reviewFindingPositionValidator;
+        this.pullRequestRevisionGuard = pullRequestRevisionGuard;
         this.optimizationProperties = optimizationProperties;
         this.optimizationPlanner = optimizationPlanner;
         this.optimizationContext = optimizationContext;
@@ -312,7 +320,8 @@ public class PrReviewRunner implements ApplicationRunner {
                 }
         );
         int rawDeepFindings = rawLlmResult.getFindings().size();
-        LlmReviewResult llmResult = reviewFindingQualityGate.filterDeepReview(enrichedInput, rawLlmResult);
+        LlmReviewResult positionedLlmResult = reviewFindingPositionValidator.validate(enrichedInput, rawLlmResult);
+        LlmReviewResult llmResult = reviewFindingQualityGate.filterDeepReview(enrichedInput, positionedLlmResult);
         TraceSpan llmSpan = trace.getSpans().getLast();
         int llmPromptCharacters = enrichedInput.getPromptPayload().getUserPrompt().length();
         llmSpan
@@ -384,6 +393,12 @@ public class PrReviewRunner implements ApplicationRunner {
                 log.info("Pull request comment writing is disabled.");
                 return;
             }
+            if (!pullRequestRevisionGuard.isCurrent(enrichedInput.getPrContext())) {
+                commentSpan.put("commentWritten", false).put("staleRevision", true);
+                commentSpan.finish(TraceStatus.SKIPPED, java.time.Instant.now());
+                log.info("Skipped review comment because the pull request head revision changed.");
+                return;
+            }
             if (fastCommentId == null) {
                 OptionalLong existingCommentId = githubPullRequestCommentClient.findExistingReviewComment(enrichedInput.getPrContext());
                 if (existingCommentId.isPresent()) {
@@ -429,7 +444,8 @@ public class PrReviewRunner implements ApplicationRunner {
             optimizationContext.clearForcedEffectiveModel();
         }
         int rawFastFindings = rawFastLlmResult.getFindings().size();
-        LlmReviewResult fastLlmResult = reviewFindingQualityGate.filterFastReview(enrichedInput, rawFastLlmResult);
+        LlmReviewResult positionedFastResult = reviewFindingPositionValidator.validate(enrichedInput, rawFastLlmResult);
+        LlmReviewResult fastLlmResult = reviewFindingQualityGate.filterFastReview(enrichedInput, positionedFastResult);
         TraceSpan fastLlmSpan = trace.getSpans().getLast();
         int promptCharacters = enrichedInput.getPromptPayload().getUserPrompt().length();
         fastLlmSpan
@@ -470,6 +486,12 @@ public class PrReviewRunner implements ApplicationRunner {
             if (!commentEnabled) {
                 commentSpan.put("commentWritten", false);
                 commentSpan.finish(TraceStatus.SKIPPED, java.time.Instant.now());
+                return null;
+            }
+            if (!pullRequestRevisionGuard.isCurrent(enrichedInput.getPrContext())) {
+                commentSpan.put("commentWritten", false).put("staleRevision", true);
+                commentSpan.finish(TraceStatus.SKIPPED, java.time.Instant.now());
+                log.info("Skipped fast review comment because the pull request head revision changed.");
                 return null;
             }
             OptionalLong existingCommentId = githubPullRequestCommentClient.findExistingReviewComment(enrichedInput.getPrContext());
