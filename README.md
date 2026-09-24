@@ -2,6 +2,8 @@
 
 PRysm 是一个基于 GitHub Pull Request 的 AI 代码评审助手。它通过 GitHub Actions 自动获取 PR 变更，结合规则检查和大模型分析生成审查结果，并把评论回写到 PR 页面，帮助开发者更快发现风险代码、理解变更影响并获得可执行的 Review 建议。
 
+当前版本已将深度评审升级为基于 LangGraph4j 的 Agentic Code Review：Supervisor 根据变更内容选择 Context、Security、Quality 和 Test Agent，MCP 风格工具注册表用 JSON Schema 描述工具输入，并统一执行超时、重试和错误返回。图状态与 Agent 结果写入文件型 Checkpoint，执行输入单独持久化，支持进程中断后的节点级恢复。
+
 本项目对应“AI PR Review 助手”方向，重点解决 PR 审查中信息分散、人工定位风险慢、Review 建议不稳定的问题。PRysm 不替代人工 Review，而是把重复性的变更梳理、风险提示和建议生成前置到 PR 页面。
 
 ## 核心能力
@@ -13,6 +15,11 @@ PRysm 是一个基于 GitHub Pull Request 的 AI 代码评审助手。它通过 
 - 调用 OpenAI 兼容接口生成变更总结、风险说明和 Review 建议。
 - 先输出快速审查评论，再用深度审查结果更新同一条评论。
 - 支持跨仓库复用 workflow，接入仓库只需要配置一个 workflow 和一个模型密钥。
+- 使用 Supervisor–Worker 模式按需调度 Context、Security、Quality 和 Test Agent。
+- 使用 LangGraph State 与文件型 Checkpoint 保存节点进度、Agent 结果和执行输入。
+- MCP 工具注册表统一管理 Tool Schema、参数错误、超时、重试和调用预算。
+- 通过最大图步数、工具调用上限和 Token Budget 防止异常循环。
+- 提供规则指标与可选 LLM-as-Judge，分别评估位置有效率、成本、证据和建议质量。
 
 ## 内置静态规则
 
@@ -204,7 +211,14 @@ GitHub API 获取 diff、文件、PR 元数据
     |
     +--> 内置规则引擎
     |
-    +--> LLM 审查引擎
+    +--> LangGraph Supervisor
+           |
+           +--> Context Agent
+           +--> Security Agent
+           +--> Quality Agent
+           +--> Test Agent
+           |
+           +--> MCP Tool Registry
     |
     v
 结果聚合、去重、排序
@@ -221,6 +235,9 @@ PR 评论渲染与回写
 - `selection`、`budget`：筛选适合进入模型的文件，并控制上下文长度。
 - `rule`：运行确定性内置规则，减少明显问题完全依赖模型判断。
 - `llm`：调用 OpenAI 兼容模型，并解析模型输出。
+- `agentic`：定义 LangGraph State、Supervisor、四类 Worker、Checkpoint 和执行预算。
+- `mcp`：定义工具 Schema、注册表、专用执行线程池、分类重试和结构化错误。
+- `evaluation`：计算确定性质量指标，并按配置启用 LLM-as-Judge。
 - `result`、`quality`：聚合、去重、排序并过滤低质量结果。
 - `comment`：把最终审查结果渲染为 PR 评论。
 - `trace`：输出审查链路摘要，便于定位失败步骤和性能问题。
@@ -241,9 +258,6 @@ PRysm 的评论包含：
 
 | 题目要求 | PRysm 当前实现 |
 | --- | --- |
-| 用户指定 GitHub PR | 用户创建或更新 PR 后，PRysm 从 GitHub Actions 事件中自动解析目标 PR。 |
-| PR 变更总结 | 基于 PR diff、标题、正文和 commit message 生成变更总结。 |
-| 风险代码识别 | 结合内置规则和 LLM 审查输出风险代码，并标注文件、行号、严重级别和规则来源。 |
 | Review 建议生成 | 针对发现的问题生成可执行建议，并在 PR 评论中集中展示。 |
 | 上下文理解 | 为变更代码补充邻近片段，并引入 PR 元数据和 commit message。 |
 | 误报控制 | 使用规则结果、模型结果去重、质量门控和严重级别排序，降低重复和低质量建议。 |
@@ -277,6 +291,7 @@ https://github.com/chinensdkcsdck/PRysm/releases/latest/download/prysm.jar
 - GitHub REST API
 - OpenAI 兼容 Chat Completions API
 - Lombok
+- LangGraph4j
 
 第三方依赖主要用于 Web/JSON、测试、配置处理和构建打包。PR 获取、上下文组织、规则引擎、模型调用、结果聚合和评论渲染等核心逻辑由本项目实现。
 

@@ -13,7 +13,7 @@ import java.util.List;
  * 该对象是 A 线和 B 线的稳定对接边界。上游负责完成过滤、排序、
  * 预算分配和 prompt 上下文组装；下游只基于该对象执行审查和回写。
  */
-public class ReviewExecutionInput {
+public class ReviewExecutionInput implements java.io.Serializable {
 
     private final PrContext prContext;
     private final PrDiff diff;

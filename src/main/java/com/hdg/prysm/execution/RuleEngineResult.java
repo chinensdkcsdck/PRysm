@@ -7,7 +7,7 @@ import java.util.List;
 /**
  * 规则引擎执行结果。
  */
-public class RuleEngineResult {
+public class RuleEngineResult implements java.io.Serializable {
 
     private final List<ReviewFinding> findings;
     private final String summary;

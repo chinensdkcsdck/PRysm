@@ -90,7 +90,7 @@ public class PrReviewFileContext {
     /**
      * 单个 snippet 的行号范围和内容。
      */
-    public static class Snippet {
+    public static class Snippet implements java.io.Serializable {
 
         private final int startLine;
         private final int endLine;

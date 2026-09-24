@@ -12,7 +12,7 @@ import java.util.List;
  *
  * 它只描述上游最终选中的文件、片段和优先级，不负责再次读取文件或解析 patch。
  */
-public class ReviewTargetFile {
+public class ReviewTargetFile implements java.io.Serializable {
 
     private final PrChangedFile changedFile;
     private final List<PrReviewFileContext.Snippet> snippets;

@@ -3,7 +3,7 @@ package com.hdg.prysm.execution;
 /**
  * Token usage reported by an LLM provider.
  */
-public class LlmTokenUsage {
+public class LlmTokenUsage implements java.io.Serializable {
 
     private final Integer promptTokens;
     private final Integer completionTokens;

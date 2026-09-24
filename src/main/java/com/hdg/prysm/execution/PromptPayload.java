@@ -3,7 +3,7 @@ package com.hdg.prysm.execution;
 /**
  * 交给 LLM Review 阶段使用的完整 prompt 载荷。
  */
-public class PromptPayload {
+public class PromptPayload implements java.io.Serializable {
 
     private final String systemPrompt;
     private final String userPrompt;

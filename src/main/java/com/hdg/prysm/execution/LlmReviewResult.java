@@ -7,7 +7,7 @@ import java.util.List;
 /**
  * LLM Review 执行结果。
  */
-public class LlmReviewResult {
+public class LlmReviewResult implements java.io.Serializable {
 
     private final List<ReviewFinding> findings;
     private final String summary;

@@ -3,7 +3,7 @@ package com.hdg.prysm.execution;
 /**
  * 规则引擎和 LLM Review 共用的统一问题结构。
  */
-public class ReviewFinding {
+public class ReviewFinding implements java.io.Serializable {
 
     private final String source;
     private final String severity;

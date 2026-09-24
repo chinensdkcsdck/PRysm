@@ -11,7 +11,7 @@ import java.util.List;
  *
  * 该对象是 PR4 和后续 review 步骤之间的共享契约。
  */
-public class PrDiff {
+public class PrDiff implements java.io.Serializable {
 
     private final PrContext context;
     private final List<PrChangedFile> changedFiles;

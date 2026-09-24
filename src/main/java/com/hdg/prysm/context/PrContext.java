@@ -5,7 +5,7 @@ package com.hdg.prysm.context;
  *
  * 只保存定位 PR 所需的非敏感信息，不持有 token 或 API key。
  */
-public class PrContext {
+public class PrContext implements java.io.Serializable {
 
     private final String owner;
     private final String repository;

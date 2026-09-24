@@ -5,6 +5,15 @@ spring:
     web-application-type: none
 
 prysm:
+  agentic:
+    enabled: ${PRYSM_AGENTIC_ENABLED:true}
+    max-iterations: ${PRYSM_AGENTIC_MAX_ITERATIONS:12}
+    max-tool-calls: ${PRYSM_AGENTIC_MAX_TOOL_CALLS:30}
+    max-token-budget: ${PRYSM_AGENTIC_MAX_TOKEN_BUDGET:131072}
+    tool-timeout-seconds: ${PRYSM_AGENTIC_TOOL_TIMEOUT_SECONDS:20}
+    tool-max-attempts: ${PRYSM_AGENTIC_TOOL_MAX_ATTEMPTS:3}
+    tool-threads: ${PRYSM_AGENTIC_TOOL_THREADS:8}
+    judge-enabled: ${PRYSM_AGENTIC_JUDGE_ENABLED:false}
   review:
     mode: ${PRYSM_REVIEW_MODE:full}
     repository-root: ${PRYSM_WORKSPACE_ROOT:${user.dir}}

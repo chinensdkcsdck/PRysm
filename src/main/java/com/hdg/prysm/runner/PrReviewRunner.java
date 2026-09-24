@@ -1,6 +1,7 @@
 package com.hdg.prysm.runner;
 
 import com.hdg.prysm.assembly.ReviewExecutionInputAssembler;
+import com.hdg.prysm.agentic.AgenticReviewOrchestrator;
 import com.hdg.prysm.budget.ReviewContextBudgetResult;
 import com.hdg.prysm.budget.ReviewContextBudgetService;
 import com.hdg.prysm.context.PrContext;
@@ -35,6 +36,7 @@ import com.hdg.prysm.trace.TraceStatus;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.ApplicationRunner;
 import org.springframework.core.env.Environment;
@@ -76,6 +78,7 @@ public class PrReviewRunner implements ApplicationRunner {
     private final String llmModel;
     private final String fastModel;
     private final ReviewMode reviewMode;
+    private AgenticReviewOrchestrator agenticReviewOrchestrator;
 
     /**
      * 注入 PR 上下文解析器、运行环境和 Runner 开关。
@@ -130,6 +133,11 @@ public class PrReviewRunner implements ApplicationRunner {
         this.llmModel = llmModel;
         this.fastModel = fastModel;
         this.reviewMode = ReviewMode.from(reviewMode);
+    }
+
+    @Autowired(required = false)
+    void setAgenticReviewOrchestrator(AgenticReviewOrchestrator agenticReviewOrchestrator) {
+        this.agenticReviewOrchestrator = agenticReviewOrchestrator;
     }
 
     /**
@@ -307,7 +315,9 @@ public class PrReviewRunner implements ApplicationRunner {
         rawLlmResult = traceRecorder.record(
                 trace,
                 "llm_review_deep",
-                () -> llmReviewRunner.run(enrichedInput),
+                () -> agenticReviewOrchestrator != null && agenticReviewOrchestrator.isEnabled()
+                        ? agenticReviewOrchestrator.review(enrichedInput, ruleResult)
+                        : llmReviewRunner.run(enrichedInput),
                 span -> {
                 }
         );

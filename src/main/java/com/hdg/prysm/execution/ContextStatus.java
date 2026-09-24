@@ -3,7 +3,7 @@ package com.hdg.prysm.execution;
 /**
  * 描述当前上下文是否足够支撑后续审查。
  */
-public class ContextStatus {
+public class ContextStatus implements java.io.Serializable {
 
     private final ContextStatusCode code;
     private final String reason;

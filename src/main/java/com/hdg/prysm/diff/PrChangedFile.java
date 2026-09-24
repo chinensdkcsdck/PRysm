@@ -5,7 +5,7 @@ package com.hdg.prysm.diff;
  *
  * PR4 负责从 GitHub changed files 数据生成该对象，PR5 可以基于它继续补充完整文件内容。
  */
-public class PrChangedFile {
+public class PrChangedFile implements java.io.Serializable {
 
     private final String filename;
     private final PrChangedFileStatus status;

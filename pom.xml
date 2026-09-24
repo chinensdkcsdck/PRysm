@@ -15,6 +15,7 @@
     <description>Prysm</description>
     <properties>
         <java.version>21</java.version>
+        <langgraph4j.version>1.6.0-beta5</langgraph4j.version>
     </properties>
     <dependencies>
         <dependency>
@@ -24,6 +25,11 @@
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-json</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.bsc.langgraph4j</groupId>
+            <artifactId>langgraph4j-core</artifactId>
+            <version>${langgraph4j.version}</version>
         </dependency>
 
         <dependency>
